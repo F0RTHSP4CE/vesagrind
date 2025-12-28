@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Random Page Slideshow</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            width: 100%;
+            background: #000;
+            overflow: hidden;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        #container {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            background: #000;
+            color: #fff;
+        }
+
+        #header {
+            padding: 6px 12px;
+            font-size: 14px;
+            background: #111;
+            color: #aaa;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        #status {
+            font-size: 12px;
+        }
+
+        #controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        #page-select {
+            font-size: 12px;
+            background: #000;
+            color: #ddd;
+            border: 1px solid #333;
+            border-radius: 3px;
+            padding: 2px 4px;
+        }
+
+        #frame-wrapper {
+            flex: 1;
+            min-height: 0;
+        }
+
+        #slideshow-frame {
+            border: none;
+            width: 100%;
+            height: 100%;
+            background: #000;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container">
+        <div id="header">
+            <div>F0RTHSP4CE VESAGRIND</div>
+            <div id="controls">
+                <label for="page-select">Page:</label>
+                <select id="page-select"></select>
+                <div id="status">Loading...</div>
+            </div>
+        </div>
+        <div id="frame-wrapper">
+            <iframe id="slideshow-frame" src="about:blank"></iframe>
+        </div>
+    </div>
+
+    <script>
+        // EDIT THIS LIST: put your page paths here (relative to this index.html)
+        // Example: if your pages live in a folder named "pages", use "pages/whatever.html".
+        const PAGES = [
+            "pages/page1.html",
+            "pages/page2.html",
+            "pages/page3.html",
+        ];
+
+        const INTERVAL_MS = 30_000; // 30 seconds
+
+        const frame = document.getElementById("slideshow-frame");
+        const statusEl = document.getElementById("status");
+        const selectEl = document.getElementById("page-select");
+
+        function pickRandomIndex(lastIndex, max) {
+            if (max <= 1) return 0;
+            let idx;
+            do {
+                idx = Math.floor(Math.random() * max);
+            } while (idx === lastIndex);
+            return idx;
+        }
+
+        let lastIndex = -1;
+        let intervalId = null;
+
+        function showPageAtIndex(index) {
+            if (!PAGES.length) {
+                statusEl.textContent = "No pages configured. Edit PAGES in index.html.";
+                frame.src = "about:blank";
+                return;
+            }
+
+            if (index < 0 || index >= PAGES.length) {
+                index = 0;
+            }
+            lastIndex = index;
+            const url = PAGES[lastIndex];
+            frame.src = url;
+            const now = new Date();
+            statusEl.textContent = `Showing: ${url} \u00b7 Next change in ${INTERVAL_MS / 1000}s \u00b7 ${now.toLocaleTimeString()}`;
+            if (selectEl) {
+                selectEl.value = String(lastIndex);
+            }
+        }
+
+        function showRandomPage() {
+            if (!PAGES.length) {
+                statusEl.textContent = "No pages configured. Edit PAGES in index.html.";
+                frame.src = "about:blank";
+                return;
+            }
+
+            const nextIndex = pickRandomIndex(lastIndex, PAGES.length);
+            showPageAtIndex(nextIndex);
+        }
+
+        function restartTimer() {
+            if (intervalId !== null) {
+                clearInterval(intervalId);
+            }
+            intervalId = setInterval(showRandomPage, INTERVAL_MS);
+        }
+
+        function nextPageNow() {
+            showRandomPage();
+            restartTimer();
+        }
+
+        function populateSelect() {
+            if (!selectEl) return;
+            selectEl.innerHTML = "";
+            PAGES.forEach((url, index) => {
+                const option = document.createElement("option");
+                option.value = String(index);
+                option.textContent = url;
+                selectEl.appendChild(option);
+            });
+        }
+
+        if (selectEl) {
+            selectEl.addEventListener("change", () => {
+                const index = parseInt(selectEl.value, 10);
+                showPageAtIndex(isNaN(index) ? 0 : index);
+                restartTimer();
+            });
+        }
+
+        // Keyboard shortcut: Space or Right Arrow -> next random page
+        window.addEventListener("keydown", (event) => {
+            // Ignore if focused inside an input/textarea/select (not likely here, but safe)
+            const target = event.target;
+            const isFormField = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT");
+            if (isFormField) return;
+
+            if (event.code === "Space" || event.key === " " || event.key === "ArrowRight") {
+                event.preventDefault();
+                nextPageNow();
+            }
+        });
+
+        // Start the slideshow
+        populateSelect();
+        showRandomPage();
+        restartTimer();
+    </script>
+</body>
+
+</html>
