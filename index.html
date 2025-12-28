@@ -30,12 +30,16 @@
         #header {
             padding: 6px 12px;
             font-size: 14px;
-            background: #111;
-            color: #aaa;
+            color: #b7b7b7aa;
             display: flex;
             justify-content: space-between;
             align-items: center;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 10;
         }
 
         #status {
@@ -51,7 +55,7 @@
         #page-select {
             font-size: 12px;
             background: #000;
-            color: #ddd;
+            color: #b7b7b7aa;
             border: 1px solid #333;
             border-radius: 3px;
             padding: 2px 4px;
@@ -60,6 +64,7 @@
         #frame-wrapper {
             flex: 1;
             min-height: 0;
+            position: relative;
         }
 
         #slideshow-frame {
@@ -127,7 +132,7 @@
             const url = PAGES[lastIndex];
             frame.src = url;
             const now = new Date();
-            statusEl.textContent = `Showing: ${url} \u00b7 Next change in ${INTERVAL_MS / 1000}s \u00b7 ${now.toLocaleTimeString()}`;
+            statusEl.textContent = `Next change in ${INTERVAL_MS / 1000}s \u00b7 ${now.toLocaleTimeString()}`;
             if (selectEl) {
                 selectEl.value = String(lastIndex);
             }
