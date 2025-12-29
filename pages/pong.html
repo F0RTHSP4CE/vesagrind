@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Auto Vertical Pong</title>
+    <style>
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #000;
+            color: #fff;
+            font-family: monospace;
+            cursor: none;
+        }
+
+        #hud {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            letter-spacing: 0.4px;
+            font-size: 12px;
+            opacity: 0.7;
+            pointer-events: none;
+            text-transform: uppercase;
+        }
+
+        #canvas-wrapper {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        canvas {
+            width: 100vw;
+            height: 100vh;
+            background: #000;
+            image-rendering: pixelated;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="hud">F0RTHSP4CE · AUTO PONG · B/W</div>
+    <div id="canvas-wrapper">
+        <canvas id="pong"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("pong");
+        const ctx = canvas.getContext("2d");
+
+        const state = {
+            w: window.innerWidth,
+            h: window.innerHeight,
+            paddleW: 160,
+            paddleH: 10,
+            ballR: 8,
+            top: { x: 0, vx: 0 },
+            bottom: { x: 0, vx: 0 },
+            ball: { x: 0, y: 0, vx: 0, vy: 0 },
+            last: performance.now(),
+            speed: 380,
+            rally: 0,
+        };
+
+        function resize() {
+            state.w = window.innerWidth;
+            state.h = window.innerHeight;
+            canvas.width = state.w;
+            canvas.height = state.h;
+            state.paddleW = Math.max(80, Math.floor(state.w * 0.18));
+            state.paddleH = Math.max(8, Math.floor(state.h * 0.012));
+            state.ballR = Math.max(6, Math.floor(Math.min(state.w, state.h) * 0.012));
+            centerPaddles();
+        }
+
+        function centerPaddles() {
+            state.top.x = state.w / 2;
+            state.bottom.x = state.w / 2;
+        }
+
+        function launchBall(direction = 1) {
+            const angle = (Math.random() * 0.4 - 0.2) * Math.PI; // small variation
+            state.ball.x = state.w / 2;
+            state.ball.y = state.h / 2;
+            const speed = state.speed * (1 + Math.random() * 0.2);
+            state.ball.vx = Math.sin(angle) * speed;
+            state.ball.vy = Math.cos(angle) * speed * direction;
+            state.rally = 0;
+        }
+
+        function clamp(val, min, max) {
+            return Math.max(min, Math.min(max, val));
+        }
+
+        function movePaddle(targetX, paddle, dt) {
+            const accel = 1600;
+            const maxSpeed = 900;
+            const dir = Math.sign(targetX - paddle.x);
+            paddle.vx += dir * accel * dt;
+            paddle.vx = clamp(paddle.vx, -maxSpeed, maxSpeed);
+            paddle.x += paddle.vx * dt;
+            const half = state.paddleW / 2;
+            if (paddle.x - half < 0) {
+                paddle.x = half;
+                paddle.vx = 0;
+            } else if (paddle.x + half > state.w) {
+                paddle.x = state.w - half;
+                paddle.vx = 0;
+            }
+        }
+
+        function update(dt) {
+            // autopilot target follows ball with slight offset to keep rallies going
+            const anticipation = clamp(state.ball.vx * 0.2, -60, 60);
+            movePaddle(state.ball.x + anticipation, state.top, dt);
+            movePaddle(state.ball.x - anticipation, state.bottom, dt);
+
+            state.ball.x += state.ball.vx * dt;
+            state.ball.y += state.ball.vy * dt;
+
+            // side walls bounce
+            if (state.ball.x - state.ballR < 0) {
+                state.ball.x = state.ballR;
+                state.ball.vx *= -1;
+            } else if (state.ball.x + state.ballR > state.w) {
+                state.ball.x = state.w - state.ballR;
+                state.ball.vx *= -1;
+            }
+
+            const half = state.paddleW / 2;
+            const topY = 30 + state.paddleH / 2;
+            const bottomY = state.h - 30 - state.paddleH / 2;
+
+            // top paddle collision
+            if (state.ball.y - state.ballR < topY + state.paddleH / 2 && state.ball.vy < 0) {
+                if (Math.abs(state.ball.x - state.top.x) <= half + state.ballR) {
+                    state.ball.y = topY + state.paddleH / 2 + state.ballR;
+                    bounce(state.top, true);
+                } else if (state.ball.y < -state.ballR) {
+                    launchBall(1);
+                }
+            }
+
+            // bottom paddle collision
+            if (state.ball.y + state.ballR > bottomY - state.paddleH / 2 && state.ball.vy > 0) {
+                if (Math.abs(state.ball.x - state.bottom.x) <= half + state.ballR) {
+                    state.ball.y = bottomY - state.paddleH / 2 - state.ballR;
+                    bounce(state.bottom, false);
+                } else if (state.ball.y > state.h + state.ballR) {
+                    launchBall(-1);
+                }
+            }
+        }
+
+        function bounce(paddle, isTop) {
+            const offset = (state.ball.x - paddle.x) / (state.paddleW / 2);
+            const speed = Math.hypot(state.ball.vx, state.ball.vy) * 1.02;
+            const angle = clamp(offset, -1, 1) * 0.9; // tilt based on where it hits the paddle
+            const dir = isTop ? 1 : -1; // send downward from top, upward from bottom
+            state.ball.vx = Math.sin(angle) * speed;
+            state.ball.vy = Math.cos(angle) * speed * dir;
+            state.rally += 1;
+        }
+
+        function render() {
+            ctx.fillStyle = "#000";
+            ctx.fillRect(0, 0, state.w, state.h);
+
+            // center line (horizontal for vertical play)
+            ctx.strokeStyle = "#222";
+            ctx.lineWidth = 2;
+            ctx.setLineDash([12, 12]);
+            ctx.beginPath();
+            ctx.moveTo(0, state.h / 2);
+            ctx.lineTo(state.w, state.h / 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // paddles
+            ctx.fillStyle = "#fff";
+            const half = state.paddleW / 2;
+            const topY = 30;
+            const bottomY = state.h - 30 - state.paddleH;
+            ctx.fillRect(state.top.x - half, topY, state.paddleW, state.paddleH);
+            ctx.fillRect(state.bottom.x - half, bottomY, state.paddleW, state.paddleH);
+
+            // ball
+            ctx.beginPath();
+            ctx.arc(state.ball.x, state.ball.y, state.ballR, 0, Math.PI * 2);
+            ctx.fill();
+
+            // rally counter
+            ctx.font = "16px monospace";
+            ctx.fillStyle = "#888";
+            ctx.fillText(`rally ${state.rally}`, 12, state.h - 12);
+        }
+
+        function loop(now) {
+            const dt = Math.min(0.033, (now - state.last) / 1000);
+            state.last = now;
+            update(dt);
+            render();
+            requestAnimationFrame(loop);
+        }
+
+        window.addEventListener("resize", resize);
+        resize();
+        launchBall(Math.random() < 0.5 ? -1 : 1);
+        requestAnimationFrame(loop);
+    </script>
+</body>
+
+</html>
