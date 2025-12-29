@@ -1,836 +1,386 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8" />
-    <title>Vesagrind Tetris</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+    <title>Autoplay Tetris</title>
     <style>
         :root {
-            --bg-1: #05080f;
-            --bg-2: #0a0f1f;
-            --bg-3: #0d162b;
-            --grid: #1b2a44;
-            --hud: #8bd5ff;
-            --hud-muted: #56758f;
-            --glow: 28px;
+            --bg: #000;
+            --fg: #00ff00;
+            --fg-dim: #009900;
         }
 
-        * {
-            box-sizing: border-box;
-        }
-
-        html,
-        body {
+        html, body {
             margin: 0;
             padding: 0;
             width: 100%;
             height: 100%;
-            background: radial-gradient(circle at 20% 20%, #12254a, #05080f 50%),
-                radial-gradient(circle at 80% 70%, #0a1c36, #05080f 50%),
-                linear-gradient(135deg, #05080f, #0a0f1f 40%, #05080f);
-            color: #d9e7ff;
-            font-family: "Space Grotesk", "Helvetica Neue", sans-serif;
             overflow: hidden;
+            background: var(--bg);
+            color: var(--fg);
+            font-family: monospace;
             cursor: none;
         }
 
-        .frame {
-            position: absolute;
-            inset: 0;
-            display: grid;
-            grid-template-rows: 1fr;
-            background: radial-gradient(ellipse at 50% 40%, #0f1a2f 0%, transparent 45%),
-                linear-gradient(180deg, transparent 0%, rgba(16, 28, 54, 0.6) 60%, rgba(8, 12, 22, 0.9) 100%);
-        }
-
-        .scene {
-            position: relative;
-            display: grid;
-            place-items: center;
-            padding: 18px 18px 26px;
-            overflow: hidden;
-            will-change: transform;
-        }
-
-        #bg-canvas,
-        #game-canvas,
-        #fx-canvas {
-            position: absolute;
-            inset: 0;
-            width: 100%;
-            height: 100%;
-        }
-
-        #board-shell {
-            position: relative;
-            width: min(90vw, 480px, 44vh);
-            aspect-ratio: 10 / 22;
-            filter: drop-shadow(0 18px 50px rgba(0, 0, 0, 0.65));
-            transform: perspective(900px) rotateX(12deg) rotateY(-8deg) scale(1);
-            transition: transform 0.4s ease;
-            animation: slowSpin 26s ease-in-out infinite;
-        }
-
-        @keyframes slowSpin {
-            0% {
-                transform: perspective(900px) rotateX(12deg) rotateY(-11deg) rotateZ(-1deg) scale(1);
-            }
-
-            50% {
-                transform: perspective(900px) rotateX(9deg) rotateY(10deg) rotateZ(1deg) scale(1.02);
-            }
-
-            100% {
-                transform: perspective(900px) rotateX(12deg) rotateY(-11deg) rotateZ(-1deg) scale(1);
-            }
-        }
-
-        .hud {
-            position: absolute;
-            right: 18px;
-            top: 18px;
-            padding: 12px 16px;
+        body {
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            gap: 16px;
-            background: linear-gradient(180deg, rgba(10, 18, 36, 0.78), rgba(8, 12, 22, 0.6));
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            border-radius: 12px;
-            backdrop-filter: blur(10px) saturate(1.2);
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+            justify-content: center;
+        }
+
+        #hud {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            font-size: 12px;
+            opacity: 0.7;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
             pointer-events: none;
         }
 
-        .brand {
-            letter-spacing: 0.08em;
-            font-weight: 700;
-            font-size: 15px;
-            color: #e0f2ff;
-            text-transform: uppercase;
-        }
-
-        .stats {
+        #game-wrapper {
             display: flex;
-            gap: 20px;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100vw;
+            height: 100vh;
+            gap: 8px;
+        }
+
+        canvas {
+            background: #000;
+            box-shadow: 0 0 32px rgba(0, 255, 0, 0.2);
+            image-rendering: pixelated;
+        }
+
+        #next {
             font-size: 12px;
-            color: var(--hud-muted);
-        }
-
-        .stat {
-            display: grid;
-            gap: 4px;
-        }
-
-        .stat .label {
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-        }
-
-        .stat .value {
-            color: var(--hud);
-            font-size: 16px;
-            font-weight: 600;
-            letter-spacing: 0.04em;
-        }
-
-        .aura {
-            position: absolute;
-            inset: -30%;
-            background: radial-gradient(circle at 35% 35%, rgba(0, 174, 255, 0.25), transparent 45%),
-                radial-gradient(circle at 80% 20%, rgba(255, 95, 207, 0.18), transparent 40%),
-                radial-gradient(circle at 60% 80%, rgba(0, 255, 140, 0.18), transparent 35%);
-            filter: blur(48px) saturate(1.2);
-            opacity: 0.9;
-            z-index: 0;
-            pointer-events: none;
-            animation: pulse 9s ease-in-out infinite;
-        }
-
-        @keyframes pulse {
-
-            0%,
-            100% {
-                transform: scale(1) translate3d(0, 0, 0);
-                opacity: 0.85;
-            }
-
-            50% {
-                transform: scale(1.05) translate3d(0, 0, 0);
-                opacity: 1;
-            }
-        }
-
-        .scanline {
-            position: absolute;
-            inset: 0;
-            background: repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 3px);
-            mix-blend-mode: screen;
             opacity: 0.6;
-            pointer-events: none;
-            animation: drift 12s linear infinite;
-        }
-
-        @keyframes drift {
-            0% {
-                transform: translateY(0);
-            }
-
-            100% {
-                transform: translateY(8px);
-            }
-        }
-
-        .label-float {
-            position: absolute;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 12px;
-            letter-spacing: 0.12em;
-            text-transform: uppercase;
-            color: rgba(255, 255, 255, 0.5);
-            backdrop-filter: blur(8px);
-            padding: 6px 10px;
-            border-radius: 999px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-        }
-
-        @keyframes quake {
-            0% {
-                transform: translate3d(0, 0, 0) rotateZ(0deg) scale(1);
-            }
-
-            12% {
-                transform: translate3d(-14px, 12px, 0) rotateZ(-3deg) scale(1.015);
-            }
-
-            32% {
-                transform: translate3d(15px, -16px, 0) rotateZ(3deg) scale(1.02);
-            }
-
-            58% {
-                transform: translate3d(-13px, 14px, 0) rotateZ(-2.5deg) scale(1.012);
-            }
-
-            80% {
-                transform: translate3d(10px, -9px, 0) rotateZ(1.6deg) scale(1.006);
-            }
-
-            100% {
-                transform: translate3d(0, 0, 0) rotateZ(0deg) scale(1);
-            }
-        }
-
-        .shake {
-            animation: quake 360ms cubic-bezier(0.18, 0.82, 0.35, 1);
         }
     </style>
 </head>
-
 <body>
-    <div class="frame">
-        <div class="scene">
-            <canvas id="bg-canvas"></canvas>
-            <div class="aura"></div>
-            <div id="board-shell">
-                <canvas id="game-canvas"></canvas>
-                <canvas id="fx-canvas"></canvas>
-                <div class="scanline"></div>
-                <div class="label-float">Autoplay enabled · Auto-rotate · Infinite</div>
-            </div>
-        </div>
-        <div class="hud">
-            <div class="brand">Vesagrind · Tetra Bloom</div>
-            <div class="stats">
-                <div class="stat">
-                    <div class="label">Score</div>
-                    <div class="value" id="score">0</div>
-                </div>
-                <div class="stat">
-                    <div class="label">Lines</div>
-                    <div class="value" id="lines">0</div>
-                </div>
-                <div class="stat">
-                    <div class="label">Level</div>
-                    <div class="value" id="level">1</div>
-                </div>
-            </div>
-        </div>
+    <div id="hud">F0RTHSP4CE · VERTICAL TETRIS · AUTOPLAY</div>
+    <div id="game-wrapper">
+        <canvas id="game" width="320" height="640"></canvas>
+        <div id="next">next: <span id="next-piece"></span></div>
     </div>
 
     <script>
-        const boardShell = document.getElementById("board-shell");
-        const scene = document.querySelector(".scene");
-        const gameCanvas = document.getElementById("game-canvas");
-        const fxCanvas = document.getElementById("fx-canvas");
-        const bgCanvas = document.getElementById("bg-canvas");
-        const gtx = gameCanvas.getContext("2d");
-        const ftx = fxCanvas.getContext("2d");
-        const btx = bgCanvas.getContext("2d");
-
-        const scoreEl = document.getElementById("score");
-        const linesEl = document.getElementById("lines");
-        const levelEl = document.getElementById("level");
-
         const COLS = 10;
-        const ROWS = 22; // top 2 hidden rows for spawn
+        const ROWS = 22; // includes hidden buffer rows at top
         const VISIBLE_ROWS = 20;
-        const GRAVITY_BASE = 210; // ms per cell; will speed up slowly
-        const DPR = Math.min(1.5, window.devicePixelRatio || 1); // cap for Pi performance
-        const RENDER_SCALE = 0.5; // halve render resolution
-        const R = DPR * RENDER_SCALE;
-
-        let cellSize = 20;
-        let boardWidth = 0;
-        let boardHeight = 0;
-        let lastTime = 0;
-        let dropTimer = 0;
-        let gravity = GRAVITY_BASE;
-
-        const bag = [];
-        const queue = [];
-        let board = createMatrix(COLS, ROWS, 0);
-        let current = null;
-        let ghostY = 0;
-        let particles = [];
-        let score = 0;
-        let lines = 0;
-        let level = 1;
-
-        let visualX = 0;
-        let visualY = 0;
-
-        const COLORS = {
-            I: ["#4bf0ff", "#147a9c"],
-            O: ["#ffd166", "#a16b1d"],
-            T: ["#d18bff", "#6f2f9e"],
-            S: ["#67ffb5", "#128d59"],
-            Z: ["#ff8c9f", "#a4193e"],
-            J: ["#6dd0ff", "#1c78b0"],
-            L: ["#ffb374", "#b05c1c"],
-        };
+        const DROP_INTERVAL = 80; // ms per drop step
 
         const SHAPES = {
             I: [
-                [[0, 1], [1, 1], [2, 1], [3, 1]],
-                [[2, 0], [2, 1], [2, 2], [2, 3]],
-            ],
-            O: [
-                [[1, 0], [2, 0], [1, 1], [2, 1]],
-            ],
-            T: [
-                [[1, 0], [0, 1], [1, 1], [2, 1]],
-                [[1, 0], [1, 1], [2, 1], [1, 2]],
-                [[0, 1], [1, 1], [2, 1], [1, 2]],
-                [[1, 0], [0, 1], [1, 1], [1, 2]],
-            ],
-            S: [
-                [[1, 0], [2, 0], [0, 1], [1, 1]],
-                [[1, 0], [1, 1], [2, 1], [2, 2]],
-            ],
-            Z: [
-                [[0, 0], [1, 0], [1, 1], [2, 1]],
-                [[2, 0], [1, 1], [2, 1], [1, 2]],
+                [0, 0, 0, 0],
+                [1, 1, 1, 1],
+                [0, 0, 0, 0],
+                [0, 0, 0, 0],
             ],
             J: [
-                [[0, 0], [0, 1], [1, 1], [2, 1]],
-                [[1, 0], [2, 0], [1, 1], [1, 2]],
-                [[0, 1], [1, 1], [2, 1], [2, 2]],
-                [[1, 0], [1, 1], [0, 2], [1, 2]],
+                [1, 0, 0],
+                [1, 1, 1],
+                [0, 0, 0],
             ],
             L: [
-                [[2, 0], [0, 1], [1, 1], [2, 1]],
-                [[1, 0], [1, 1], [1, 2], [2, 2]],
-                [[0, 1], [1, 1], [2, 1], [0, 2]],
-                [[0, 0], [1, 0], [1, 1], [1, 2]],
+                [0, 0, 1],
+                [1, 1, 1],
+                [0, 0, 0],
+            ],
+            O: [
+                [1, 1],
+                [1, 1],
+            ],
+            S: [
+                [0, 1, 1],
+                [1, 1, 0],
+                [0, 0, 0],
+            ],
+            T: [
+                [0, 1, 0],
+                [1, 1, 1],
+                [0, 0, 0],
+            ],
+            Z: [
+                [1, 1, 0],
+                [0, 1, 1],
+                [0, 0, 0],
             ],
         };
 
-        const SOUNDLESS = true; // placeholder hook for audio if desired later
+        const PIECES = Object.keys(SHAPES);
 
-        function createMatrix(w, h, fill) {
-            return Array.from({ length: h }, () => Array.from({ length: w }, () => fill));
+        const canvas = document.getElementById("game");
+        const ctx = canvas.getContext("2d");
+        const nextSpan = document.getElementById("next-piece");
+
+        let block = 24;
+
+        const state = {
+            board: createBoard(),
+            current: null,
+            pos: { x: 0, y: 0 },
+            next: randomPiece(),
+            plan: null,
+            lastDrop: performance.now(),
+            lines: 0,
+            gameOver: false,
+        };
+
+        function createBoard() {
+            return Array.from({ length: ROWS }, () => Array(COLS).fill(0));
         }
 
-        function shuffle(arr) {
-            for (let i = arr.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [arr[i], arr[j]] = [arr[j], arr[i]];
+        function randomPiece() {
+            const key = PIECES[Math.floor(Math.random() * PIECES.length)];
+            return { key, shape: SHAPES[key].map(row => [...row]) };
+        }
+
+        function rotate(shape) {
+            const h = shape.length;
+            const w = shape[0].length;
+            const res = Array.from({ length: w }, () => Array(h).fill(0));
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    res[x][h - 1 - y] = shape[y][x];
+                }
             }
-            return arr;
+            return res;
         }
 
-        function nextBag() {
-            const pieces = shuffle(["I", "O", "T", "S", "Z", "J", "L"]);
-            bag.push(...pieces);
+        function cloneBoard(board) {
+            return board.map(row => [...row]);
         }
 
-        function spawnPiece() {
-            if (bag.length < 4) nextBag();
-            const type = bag.shift();
-            const shape = SHAPES[type];
-            current = {
-                type,
-                rotation: 0,
-                x: 3,
-                y: -2,
-                cells: shape[0],
-            };
-            visualX = current.x;
-            visualY = current.y;
-            queueNext();
-            applyAutoplayDecision();
-            updateGhost();
-        }
-
-        function queueNext() {
-            while (queue.length < 3) {
-                if (bag.length === 0) nextBag();
-                queue.push(bag.shift());
-            }
-        }
-
-        function rotatePiece(rot) {
-            current.rotation = rot % SHAPES[current.type].length;
-            current.cells = SHAPES[current.type][current.rotation];
-        }
-
-        function collide(px = current.x, py = current.y, cells = current.cells) {
-            for (const [cx, cy] of cells) {
-                const x = px + cx;
-                const y = py + cy;
-                if (x < 0 || x >= COLS || y >= ROWS) return true;
-                if (y >= 0 && board[y][x]) return true;
+        function collides(shape, pos, board) {
+            for (let y = 0; y < shape.length; y++) {
+                for (let x = 0; x < shape[y].length; x++) {
+                    if (!shape[y][x]) continue;
+                    const bx = pos.x + x;
+                    const by = pos.y + y;
+                    if (bx < 0 || bx >= COLS || by >= ROWS) return true;
+                    if (by >= 0 && board[by][bx]) return true;
+                }
             }
             return false;
         }
 
-        function mergePiece() {
-            for (const [cx, cy] of current.cells) {
-                const x = current.x + cx;
-                const y = current.y + cy;
-                if (y >= 0 && y < ROWS) {
-                    board[y][x] = current.type;
+        function merge(board, shape, pos) {
+            for (let y = 0; y < shape.length; y++) {
+                for (let x = 0; x < shape[y].length; x++) {
+                    if (!shape[y][x]) continue;
+                    const bx = pos.x + x;
+                    const by = pos.y + y;
+                    if (by >= 0 && by < ROWS && bx >= 0 && bx < COLS) {
+                        board[by][bx] = 1;
+                    }
                 }
             }
         }
 
-        function clearLines() {
+        function clearLines(board) {
             let cleared = 0;
             for (let y = ROWS - 1; y >= 0; y--) {
-                if (board[y].every(Boolean)) {
-                    cleared++;
+                if (board[y].every(v => v)) {
                     board.splice(y, 1);
-                    board.unshift(Array.from({ length: COLS }, () => 0));
-                    spawnLineFX(y);
+                    board.unshift(Array(COLS).fill(0));
+                    cleared++;
                     y++;
                 }
             }
-            if (cleared > 0) {
-                lines += cleared;
-                score += Math.floor((cleared ** 2) * 120 * level);
-                level = 1 + Math.floor(lines / 10);
-                gravity = Math.max(120, GRAVITY_BASE - (level - 1) * 30);
-                updateHud();
+            return cleared;
+        }
+
+        function boardMetrics(board) {
+            const heights = Array(COLS).fill(0);
+            const holes = Array(COLS).fill(0);
+            const wellDepths = Array(COLS).fill(0);
+            for (let x = 0; x < COLS; x++) {
+                let blockSeen = false;
+                for (let y = 0; y < ROWS; y++) {
+                    if (board[y][x]) {
+                        blockSeen = true;
+                        if (!heights[x]) heights[x] = ROWS - y;
+                    } else if (blockSeen) {
+                        holes[x]++;
+                    }
+                }
+            }
+
+            for (let x = 0; x < COLS; x++) {
+                let depth = 0;
+                for (let y = 0; y < ROWS; y++) {
+                    const left = x === 0 ? 1 : board[y][x - 1];
+                    const right = x === COLS - 1 ? 1 : board[y][x + 1];
+                    if (!board[y][x] && left && right) {
+                        depth++;
+                        wellDepths[x] += depth;
+                    } else {
+                        depth = 0;
+                    }
+                }
+            }
+
+            let bumpiness = 0;
+            for (let x = 0; x < COLS - 1; x++) {
+                bumpiness += Math.abs(heights[x] - heights[x + 1]);
+            }
+
+            const aggregateHeight = heights.reduce((a, b) => a + b, 0);
+            const totalHoles = holes.reduce((a, b) => a + b, 0);
+            const wells = wellDepths.reduce((a, b) => a + b, 0);
+            return { aggregateHeight, totalHoles, bumpiness, wells };
+        }
+
+        function evaluateBoard(board, linesCleared) {
+            const { aggregateHeight, totalHoles, bumpiness, wells } = boardMetrics(board);
+            // Tuned for "keep it low" behavior.
+            return (
+                linesCleared * 10 -
+                aggregateHeight * 0.45 -
+                totalHoles * 5 -
+                bumpiness * 0.35 -
+                wells * 0.08
+            );
+        }
+
+        function placements(piece, board) {
+            const results = [];
+            let shape = piece.shape;
+            for (let r = 0; r < 4; r++) {
+                const width = shape[0].length;
+                const minX = 0;
+                const maxX = COLS - width;
+                for (let x = minX; x <= maxX; x++) {
+                    let y = -2; // start slightly above visible board
+                    while (!collides(shape, { x, y: y + 1 }, board)) {
+                        y++;
+                    }
+                    const boardCopy = cloneBoard(board);
+                    merge(boardCopy, shape, { x, y });
+                    const linesCleared = clearLines(boardCopy);
+                    const score = evaluateBoard(boardCopy, linesCleared);
+                    results.push({ score, x, shape: shape.map(row => [...row]), linesCleared });
+                }
+                shape = rotate(shape);
+            }
+            results.sort((a, b) => b.score - a.score);
+            return results;
+        }
+
+        function pickPlan() {
+            const options = placements(state.current, state.board);
+            return options[0] || null;
+        }
+
+        function spawnPiece() {
+            state.current = state.next;
+            state.next = randomPiece();
+            nextSpan.textContent = state.next.key;
+            state.pos = { x: Math.floor((COLS - state.current.shape[0].length) / 2), y: -2 };
+            state.plan = pickPlan();
+            if (collides(state.current.shape, state.pos, state.board)) {
+                state.board = createBoard();
+                state.lines = 0;
             }
         }
 
-        function updateHud() {
-            scoreEl.textContent = score.toLocaleString("en-US");
-            linesEl.textContent = lines.toString();
-            levelEl.textContent = level.toString();
+        function stepAutoplay() {
+            if (!state.plan) return;
+            // Snap rotation/column immediately for simplicity.
+            state.current.shape = state.plan.shape;
+            state.pos.x = state.plan.x;
         }
 
-        function hardDrop() {
-            while (!collide(current.x, current.y + 1)) {
-                current.y++;
+        function drop() {
+            if (collides(state.current.shape, { x: state.pos.x, y: state.pos.y + 1 }, state.board)) {
+                merge(state.board, state.current.shape, state.pos);
+                const cleared = clearLines(state.board);
+                state.lines += cleared;
+                spawnPiece();
+            } else {
+                state.pos.y += 1;
             }
-            lockPiece();
-        }
-
-        function lockPiece() {
-            mergePiece();
-            clearLines();
-            triggerShake();
-            spawnPiece();
-        }
-
-        function updateGhost() {
-            let gy = current.y;
-            while (!collide(current.x, gy + 1)) gy++;
-            ghostY = gy;
         }
 
         function resize() {
-            const rect = boardShell.getBoundingClientRect();
-            cellSize = rect.width / COLS;
-            boardWidth = cellSize * COLS;
-            boardHeight = cellSize * ROWS;
-
-            // Align canvas internal pixels exactly to board dimensions
-            gameCanvas.width = boardWidth * R;
-            gameCanvas.height = boardHeight * R;
-            fxCanvas.width = boardWidth * R;
-            fxCanvas.height = boardHeight * R;
-
-            // Match CSS size to computed board size to avoid overflow
-            gameCanvas.style.width = `${boardWidth}px`;
-            gameCanvas.style.height = `${boardHeight}px`;
-            fxCanvas.style.width = `${boardWidth}px`;
-            fxCanvas.style.height = `${boardHeight}px`;
-
-            bgCanvas.width = window.innerWidth * R;
-            bgCanvas.height = window.innerHeight * R;
-            gtx.setTransform(R, 0, 0, R, 0, 0);
-            ftx.setTransform(R, 0, 0, R, 0, 0);
-            btx.setTransform(R, 0, 0, R, 0, 0);
+            const usableHeight = window.innerHeight;
+            const usableWidth = window.innerWidth;
+            // Fit to the limiting dimension while keeping 10x20 aspect.
+            const blockSize = Math.floor(Math.min(usableWidth / COLS, usableHeight / VISIBLE_ROWS));
+            block = Math.max(12, blockSize);
+            canvas.width = block * COLS;
+            canvas.height = block * VISIBLE_ROWS;
         }
 
-        window.addEventListener("resize", resize);
-
-        // Autoplay: simple lookahead with heuristic scoring
-        function applyAutoplayDecision() {
-            const decision = chooseBestPlacement(current.type, board);
-            rotatePiece(decision.rotation);
-            current.x = decision.x;
-            // Drop is still animated by gravity; rotation and placement are auto-selected
+        function drawBlock(x, y, dim) {
+            ctx.fillStyle = "#003300";
+            ctx.fillRect(x * block, y * block, block, block);
+            ctx.fillStyle = varColor(dim);
+            ctx.fillRect(x * block + 2, y * block + 2, block - 4, block - 4);
         }
 
-        function chooseBestPlacement(type, boardState) {
-            const shapes = SHAPES[type];
-            let bestScore = -Infinity;
-            let best = { x: 3, rotation: 0 };
-
-            for (let r = 0; r < shapes.length; r++) {
-                const cells = shapes[r];
-                const minX = Math.min(...cells.map(([x]) => x));
-                const maxX = Math.max(...cells.map(([x]) => x));
-                for (let x = -minX; x <= COLS - 1 - maxX; x++) {
-                    let y = -2;
-                    while (!collide(x, y + 1, cells)) y++;
-                    if (y < -1) continue; // trapped above top
-                    const cloned = boardState.map((row) => row.slice());
-                    for (const [cx, cy] of cells) {
-                        const gx = x + cx;
-                        const gy = y + cy;
-                        if (gy >= 0) cloned[gy][gx] = type;
-                    }
-                    const linesCleared = countFullLines(cloned);
-                    const s = evaluateBoard(cloned, linesCleared);
-                    if (s > bestScore) {
-                        bestScore = s;
-                        best = { x, rotation: r };
-                    }
-                }
-            }
-            return best;
+        function varColor(dim) {
+            return dim ? "#007700" : "#00ff00";
         }
 
-        function countFullLines(matrix) {
-            let c = 0;
-            for (let y = 0; y < ROWS; y++) {
-                if (matrix[y].every(Boolean)) c++;
-            }
-            return c;
-        }
+        function render() {
+            ctx.fillStyle = "#000";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        function evaluateBoard(matrix, linesCleared) {
-            let aggregateHeight = 0;
-            let holes = 0;
-            let bumpiness = 0;
-            let lastHeight = null;
-
-            for (let x = 0; x < COLS; x++) {
-                let columnHeight = 0;
-                let blockFound = false;
-                let colHoles = 0;
-                for (let y = 0; y < ROWS; y++) {
-                    if (matrix[y][x]) {
-                        if (!blockFound) {
-                            columnHeight = ROWS - y;
-                            blockFound = true;
-                        }
-                    } else if (blockFound) {
-                        colHoles++;
-                    }
-                }
-                aggregateHeight += columnHeight;
-                holes += colHoles;
-                if (lastHeight !== null) bumpiness += Math.abs(columnHeight - lastHeight);
-                lastHeight = columnHeight;
-            }
-
-            const wellSums = columnWells(matrix);
-
-            // Tuned heuristic weights for stable auto-play
-            const score = linesCleared * 1.6
-                - aggregateHeight * 0.34
-                - holes * 1.2
-                - bumpiness * 0.18
-                - wellSums * 0.15;
-            return score;
-        }
-
-        function columnWells(matrix) {
-            let wells = 0;
-            for (let x = 0; x < COLS; x++) {
-                for (let y = 0; y < ROWS; y++) {
-                    const filledLeft = x === 0 || matrix[y][x - 1];
-                    const filledRight = x === COLS - 1 || matrix[y][x + 1];
-                    if (filledLeft && filledRight && !matrix[y][x]) {
-                        let depth = 0;
-                        let yy = y;
-                        while (yy < ROWS && !matrix[yy][x]) {
-                            depth++;
-                            yy++;
-                        }
-                        wells += (depth * (depth + 1)) / 2;
-                    }
-                }
-            }
-            return wells;
-        }
-
-        function update(dt) {
-            dropTimer += dt;
-            if (dropTimer >= gravity) {
-                dropTimer = 0;
-                if (!collide(current.x, current.y + 1)) {
-                    current.y++;
-                } else {
-                    lockPiece();
-                }
-                updateGhost();
-            }
-
-            // Smooth visual easing toward logical position
-            visualX += (current.x - visualX) * 0.28;
-            visualY += (current.y - visualY) * 0.28;
-
-            stepParticles(dt);
-        }
-
-        function drawBackground(t) {
-            const w = bgCanvas.width / R;
-            const h = bgCanvas.height / R;
-            btx.clearRect(0, 0, w, h);
-            const cx = w * 0.5 + Math.sin(t * 0.0004) * 80;
-            const cy = h * 0.45 + Math.cos(t * 0.0005) * 70;
-            const g1 = btx.createRadialGradient(cx, cy, 40, cx, cy, Math.max(w, h) * 0.6);
-            g1.addColorStop(0, "rgba(40, 120, 255, 0.18)");
-            g1.addColorStop(1, "rgba(5, 8, 15, 0)");
-            btx.fillStyle = g1;
-            btx.fillRect(0, 0, w, h);
-
-            const g2 = btx.createLinearGradient(0, 0, w, h);
-            g2.addColorStop(0, "rgba(255, 110, 200, 0.08)");
-            g2.addColorStop(1, "rgba(0, 220, 190, 0.08)");
-            btx.fillStyle = g2;
-            btx.fillRect(0, 0, w, h);
-
-            // subtle moving shards
-            const shards = 18;
-            btx.globalCompositeOperation = "screen";
-            for (let i = 0; i < shards; i++) {
-                const sx = (t * 0.02 + i * 200) % (w + 200) - 100;
-                const sy = (i * 91 + t * 0.015) % (h + 200) - 100;
-                btx.fillStyle = "rgba(255, 255, 255, 0.025)";
-                btx.beginPath();
-                btx.ellipse(sx, sy, 80, 6, (i % 2 ? 1 : -1) * 0.4, 0, Math.PI * 2);
-                btx.fill();
-            }
-            btx.globalCompositeOperation = "source-over";
-        }
-
-        function drawBoard() {
-            gtx.clearRect(0, 0, boardWidth, boardHeight);
-            const offsetY = (ROWS - VISIBLE_ROWS) * cellSize;
-
-            // grid glow
-            gtx.save();
-            gtx.globalAlpha = 0.18;
-            gtx.strokeStyle = "#1c2c44";
-            gtx.lineWidth = 1;
+            // Grid (subtle)
+            ctx.strokeStyle = "#003300";
+            ctx.lineWidth = 1;
             for (let x = 0; x <= COLS; x++) {
-                gtx.beginPath();
-                gtx.moveTo(x * cellSize + 0.5, offsetY);
-                gtx.lineTo(x * cellSize + 0.5, boardHeight);
-                gtx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(x * block + 0.5, 0);
+                ctx.lineTo(x * block + 0.5, canvas.height);
+                ctx.stroke();
             }
             for (let y = 0; y <= VISIBLE_ROWS; y++) {
-                gtx.beginPath();
-                gtx.moveTo(0, offsetY + y * cellSize + 0.5);
-                gtx.lineTo(boardWidth, offsetY + y * cellSize + 0.5);
-                gtx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(0, y * block + 0.5);
+                ctx.lineTo(canvas.width, y * block + 0.5);
+                ctx.stroke();
             }
-            gtx.restore();
 
-            // board tiles
-            for (let y = 2; y < ROWS; y++) {
+            for (let y = 0; y < VISIBLE_ROWS; y++) {
                 for (let x = 0; x < COLS; x++) {
-                    const cell = board[y][x];
-                    if (cell) drawCell(x, y - 2, COLORS[cell]);
+                    if (state.board[y + (ROWS - VISIBLE_ROWS)][x]) {
+                        drawBlock(x, y, true);
+                    }
                 }
             }
 
-            // ghost
-            gtx.save();
-            gtx.globalAlpha = 0.12;
-            drawPiece(current.x, ghostY, current.cells, COLORS[current.type]);
-            gtx.restore();
-
-            // active piece
-            drawPiece(visualX, visualY, current.cells, COLORS[current.type], true);
-        }
-
-        function drawPiece(px, py, cells, colors, glow) {
-            for (const [cx, cy] of cells) {
-                const gx = px + cx;
-                const gy = py + cy - 2; // render offset for hidden rows
-                if (gy < 0) continue;
-                drawCell(gx, gy, colors, glow);
-            }
-        }
-
-        function drawCell(x, y, colors, glow = false) {
-            const [c1, c2] = colors;
-            const px = x * cellSize;
-            const py = y * cellSize;
-            const inset = cellSize * 0.08;
-            const size = cellSize - inset * 2;
-            const grad = gtx.createLinearGradient(px, py, px, py + size);
-            grad.addColorStop(0, lighten(c1, 0.2));
-            grad.addColorStop(1, darken(c2, 0.15));
-            gtx.fillStyle = grad;
-            gtx.shadowColor = glow ? c1 : "transparent";
-            gtx.shadowBlur = glow ? 8 : 0;
-            gtx.fillRect(px + inset, py + inset, size, size);
-
-            // bevel
-            gtx.save();
-            gtx.globalAlpha = 0.35;
-            gtx.fillStyle = "rgba(255,255,255,0.25)";
-            gtx.fillRect(px + inset, py + inset, size, size * 0.18);
-            gtx.restore();
-
-            gtx.save();
-            gtx.globalAlpha = 0.18;
-            gtx.fillStyle = "#000";
-            gtx.fillRect(px + inset, py + inset + size * 0.82, size, size * 0.18);
-            gtx.restore();
-        }
-
-        function lighten(color, amount) {
-            const { r, g, b } = hexToRgb(color);
-            const f = (v) => Math.min(255, Math.floor(v + 255 * amount));
-            return `rgb(${f(r)}, ${f(g)}, ${f(b)})`;
-        }
-
-        function darken(color, amount) {
-            const { r, g, b } = hexToRgb(color);
-            const f = (v) => Math.max(0, Math.floor(v * (1 - amount)));
-            return `rgb(${f(r)}, ${f(g)}, ${f(b)})`;
-        }
-
-        function hexToRgb(hex) {
-            const h = hex.replace("#", "");
-            const bigint = parseInt(h, 16);
-            return {
-                r: (bigint >> 16) & 255,
-                g: (bigint >> 8) & 255,
-                b: bigint & 255,
-            };
-        }
-
-        function spawnLineFX(lineY) {
-            const y = (lineY - 2) * cellSize + cellSize / 2;
-            for (let x = 0; x < COLS; x++) {
-                const px = x * cellSize + cellSize / 2;
-                for (let i = 0; i < 4; i++) {
-                    particles.push({
-                        type: "ember",
-                        x: px,
-                        y,
-                        vx: (Math.random() - 0.5) * 0.45,
-                        vy: (Math.random() - 1.4) * 0.8,
-                        life: 780,
-                        age: 0,
-                        color: `hsla(${(x / COLS) * 280 + 120}, 80%, 65%, 1)`,
-                    });
+            for (let y = 0; y < state.current.shape.length; y++) {
+                for (let x = 0; x < state.current.shape[y].length; x++) {
+                    if (!state.current.shape[y][x]) continue;
+                    const drawY = state.pos.y + y - (ROWS - VISIBLE_ROWS);
+                    if (drawY >= 0) drawBlock(state.pos.x + x, drawY, false);
                 }
-                // lighter flame burst for low-power
-                particles.push({
-                    type: "flame",
-                    x: px + (Math.random() - 0.5) * cellSize * 0.4,
-                    y: y + (Math.random() - 0.5) * cellSize * 0.15,
-                    vx: (Math.random() - 0.5) * 0.28,
-                    vy: -0.55 - Math.random() * 0.35,
-                    life: 520 + Math.random() * 180,
-                    age: 0,
-                    size: cellSize * (1 + Math.random() * 0.5),
-                    hue: 40 + Math.random() * 40,
-                });
             }
         }
 
-        function stepParticles(dt) {
-            ftx.clearRect(0, 0, boardWidth, boardHeight);
-            particles = particles.filter((p) => p.age < p.life);
-            for (const p of particles) {
-                p.age += dt;
-                p.x += p.vx * dt * 0.5;
-                p.y += p.vy * dt * 0.5;
-                p.vy += 0.0015 * dt;
-                const alpha = 1 - p.age / p.life;
-
-                if (p.type === "flame") {
-                    const radius = p.size * (0.6 + alpha * 0.6);
-                    const grad = ftx.createRadialGradient(p.x, p.y, radius * 0.12, p.x, p.y, radius);
-                    grad.addColorStop(0, `hsla(${p.hue}, 100%, 65%, ${alpha * 0.9})`);
-                    grad.addColorStop(0.3, `hsla(${p.hue + 20}, 100%, 55%, ${alpha * 0.8})`);
-                    grad.addColorStop(0.7, `hsla(${p.hue + 40}, 90%, 50%, ${alpha * 0.4})`);
-                    grad.addColorStop(1, `hsla(${p.hue + 50}, 80%, 45%, 0)`);
-                    ftx.fillStyle = grad;
-                    ftx.beginPath();
-                    ftx.ellipse(p.x, p.y, radius, radius * 1.2, 0.25, 0, Math.PI * 2);
-                    ftx.fill();
-                    continue;
-                }
-
-                // ember default
-                ftx.fillStyle = p.color.replace(", 1)", `, ${alpha})`);
-                ftx.beginPath();
-                ftx.ellipse(p.x, p.y, 4, 1.5, Math.PI / 8, 0, Math.PI * 2);
-                ftx.fill();
+        function loop(now) {
+            const delta = now - state.lastDrop;
+            if (delta > DROP_INTERVAL) {
+                state.lastDrop = now;
+                stepAutoplay();
+                drop();
             }
+            render();
+            requestAnimationFrame(loop);
         }
 
-        function triggerShake() {
-            boardShell.classList.remove("shake");
-            void boardShell.offsetWidth; // force reflow to restart animation
-            boardShell.classList.add("shake");
-        }
-
-        function animate(t) {
-            const dt = lastTime ? t - lastTime : 0;
-            lastTime = t;
-            drawBackground(t);
-            update(dt);
-            drawBoard();
-            requestAnimationFrame(animate);
-        }
-
-        // Initialize
         resize();
         spawnPiece();
-        updateHud();
-        requestAnimationFrame(animate);
+        window.addEventListener("resize", resize);
+        requestAnimationFrame(loop);
     </script>
 </body>
-
 </html>
