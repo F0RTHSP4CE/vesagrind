@@ -285,6 +285,7 @@
         const ROWS = 22; // top 2 hidden rows for spawn
         const VISIBLE_ROWS = 20;
         const GRAVITY_BASE = 210; // ms per cell; will speed up slowly
+        const DPR = Math.min(1.5, window.devicePixelRatio || 1); // cap for Pi performance
 
         let cellSize = 20;
         let boardWidth = 0;
@@ -474,10 +475,10 @@
             boardHeight = cellSize * ROWS;
 
             // Align canvas internal pixels exactly to board dimensions
-            gameCanvas.width = boardWidth * devicePixelRatio;
-            gameCanvas.height = boardHeight * devicePixelRatio;
-            fxCanvas.width = boardWidth * devicePixelRatio;
-            fxCanvas.height = boardHeight * devicePixelRatio;
+            gameCanvas.width = boardWidth * DPR;
+            gameCanvas.height = boardHeight * DPR;
+            fxCanvas.width = boardWidth * DPR;
+            fxCanvas.height = boardHeight * DPR;
 
             // Match CSS size to computed board size to avoid overflow
             gameCanvas.style.width = `${boardWidth}px`;
@@ -485,11 +486,11 @@
             fxCanvas.style.width = `${boardWidth}px`;
             fxCanvas.style.height = `${boardHeight}px`;
 
-            bgCanvas.width = window.innerWidth * devicePixelRatio;
-            bgCanvas.height = window.innerHeight * devicePixelRatio;
-            gtx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
-            ftx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
-            btx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+            bgCanvas.width = window.innerWidth * DPR;
+            bgCanvas.height = window.innerHeight * DPR;
+            gtx.setTransform(DPR, 0, 0, DPR, 0, 0);
+            ftx.setTransform(DPR, 0, 0, DPR, 0, 0);
+            btx.setTransform(DPR, 0, 0, DPR, 0, 0);
         }
 
         window.addEventListener("resize", resize);
@@ -635,7 +636,7 @@
             btx.fillRect(0, 0, w, h);
 
             // subtle moving shards
-            const shards = 40;
+            const shards = 18;
             btx.globalCompositeOperation = "screen";
             for (let i = 0; i < shards; i++) {
                 const sx = (t * 0.02 + i * 200) % (w + 200) - 100;
@@ -709,7 +710,7 @@
             grad.addColorStop(1, darken(c2, 0.15));
             gtx.fillStyle = grad;
             gtx.shadowColor = glow ? c1 : "transparent";
-            gtx.shadowBlur = glow ? 18 : 0;
+            gtx.shadowBlur = glow ? 8 : 0;
             gtx.fillRect(px + inset, py + inset, size, size);
 
             // bevel
@@ -752,32 +753,30 @@
             const y = (lineY - 2) * cellSize + cellSize / 2;
             for (let x = 0; x < COLS; x++) {
                 const px = x * cellSize + cellSize / 2;
-                for (let i = 0; i < 8; i++) {
+                for (let i = 0; i < 4; i++) {
                     particles.push({
                         type: "ember",
                         x: px,
                         y,
-                        vx: (Math.random() - 0.5) * 0.6,
-                        vy: (Math.random() - 1.6) * 0.9,
-                        life: 900,
+                        vx: (Math.random() - 0.5) * 0.45,
+                        vy: (Math.random() - 1.4) * 0.8,
+                        life: 780,
                         age: 0,
                         color: `hsla(${(x / COLS) * 280 + 120}, 80%, 65%, 1)`,
                     });
                 }
-                // flame tongues for 3D-ish burst
-                for (let i = 0; i < 3; i++) {
-                    particles.push({
-                        type: "flame",
-                        x: px + (Math.random() - 0.5) * cellSize * 0.6,
-                        y: y + (Math.random() - 0.5) * cellSize * 0.2,
-                        vx: (Math.random() - 0.5) * 0.35,
-                        vy: -0.65 - Math.random() * 0.45,
-                        life: 640 + Math.random() * 240,
-                        age: 0,
-                        size: cellSize * (1.2 + Math.random() * 0.8),
-                        hue: 40 + Math.random() * 40,
-                    });
-                }
+                // lighter flame burst for low-power
+                particles.push({
+                    type: "flame",
+                    x: px + (Math.random() - 0.5) * cellSize * 0.4,
+                    y: y + (Math.random() - 0.5) * cellSize * 0.15,
+                    vx: (Math.random() - 0.5) * 0.28,
+                    vy: -0.55 - Math.random() * 0.35,
+                    life: 520 + Math.random() * 180,
+                    age: 0,
+                    size: cellSize * (1 + Math.random() * 0.5),
+                    hue: 40 + Math.random() * 40,
+                });
             }
         }
 
