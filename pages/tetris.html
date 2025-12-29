@@ -286,6 +286,8 @@
         const VISIBLE_ROWS = 20;
         const GRAVITY_BASE = 210; // ms per cell; will speed up slowly
         const DPR = Math.min(1.5, window.devicePixelRatio || 1); // cap for Pi performance
+        const RENDER_SCALE = 0.5; // halve render resolution
+        const R = DPR * RENDER_SCALE;
 
         let cellSize = 20;
         let boardWidth = 0;
@@ -475,10 +477,10 @@
             boardHeight = cellSize * ROWS;
 
             // Align canvas internal pixels exactly to board dimensions
-            gameCanvas.width = boardWidth * DPR;
-            gameCanvas.height = boardHeight * DPR;
-            fxCanvas.width = boardWidth * DPR;
-            fxCanvas.height = boardHeight * DPR;
+            gameCanvas.width = boardWidth * R;
+            gameCanvas.height = boardHeight * R;
+            fxCanvas.width = boardWidth * R;
+            fxCanvas.height = boardHeight * R;
 
             // Match CSS size to computed board size to avoid overflow
             gameCanvas.style.width = `${boardWidth}px`;
@@ -486,11 +488,11 @@
             fxCanvas.style.width = `${boardWidth}px`;
             fxCanvas.style.height = `${boardHeight}px`;
 
-            bgCanvas.width = window.innerWidth * DPR;
-            bgCanvas.height = window.innerHeight * DPR;
-            gtx.setTransform(DPR, 0, 0, DPR, 0, 0);
-            ftx.setTransform(DPR, 0, 0, DPR, 0, 0);
-            btx.setTransform(DPR, 0, 0, DPR, 0, 0);
+            bgCanvas.width = window.innerWidth * R;
+            bgCanvas.height = window.innerHeight * R;
+            gtx.setTransform(R, 0, 0, R, 0, 0);
+            ftx.setTransform(R, 0, 0, R, 0, 0);
+            btx.setTransform(R, 0, 0, R, 0, 0);
         }
 
         window.addEventListener("resize", resize);
@@ -618,8 +620,8 @@
         }
 
         function drawBackground(t) {
-            const w = bgCanvas.width / devicePixelRatio;
-            const h = bgCanvas.height / devicePixelRatio;
+            const w = bgCanvas.width / R;
+            const h = bgCanvas.height / R;
             btx.clearRect(0, 0, w, h);
             const cx = w * 0.5 + Math.sin(t * 0.0004) * 80;
             const cy = h * 0.45 + Math.cos(t * 0.0005) * 70;
