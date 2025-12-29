@@ -76,7 +76,7 @@
         const COLS = 10;
         const ROWS = 22; // includes hidden buffer rows at top
         const VISIBLE_ROWS = 20;
-        const DROP_INTERVAL = 150; // ms per drop step
+        const DROP_INTERVAL = 200; // ms per drop step
 
         const SHAPES = {
             I: [
@@ -130,7 +130,8 @@
             pos: { x: 0, y: 0 },
             next: randomPiece(),
             plan: null,
-            lastDrop: performance.now(),
+            lastFrame: performance.now(),
+            fallProgress: 0,
             lines: 0,
             gameOver: false,
         };
@@ -287,6 +288,7 @@
             nextSpan.textContent = state.next.key;
             state.pos = { x: Math.floor((COLS - state.current.shape[0].length) / 2), y: -2 };
             state.plan = pickPlan();
+            state.fallProgress = 0;
             if (collides(state.current.shape, state.pos, state.board)) {
                 state.board = createBoard();
                 state.lines = 0;
@@ -306,6 +308,7 @@
                 const cleared = clearLines(state.board);
                 state.lines += cleared;
                 spawnPiece();
+                state.fallProgress = 0;
             } else {
                 state.pos.y += 1;
             }
@@ -332,7 +335,10 @@
             return dim ? "#007700" : "#00ff00";
         }
 
-        function render() {
+        function render(fallProgress = 0) {
+            // Prevent rendering through floor/stack when next step collides.
+            const blocked = collides(state.current.shape, { x: state.pos.x, y: state.pos.y + 1 }, state.board);
+            const effectiveFall = blocked ? 0 : fallProgress;
             ctx.fillStyle = "#000";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -363,20 +369,24 @@
             for (let y = 0; y < state.current.shape.length; y++) {
                 for (let x = 0; x < state.current.shape[y].length; x++) {
                     if (!state.current.shape[y][x]) continue;
-                    const drawY = state.pos.y + y - (ROWS - VISIBLE_ROWS);
+                    const drawY = state.pos.y + y + effectiveFall - (ROWS - VISIBLE_ROWS);
                     if (drawY >= 0) drawBlock(state.pos.x + x, drawY, false);
                 }
             }
         }
 
         function loop(now) {
-            const delta = now - state.lastDrop;
-            if (delta > DROP_INTERVAL) {
-                state.lastDrop = now;
+            const delta = now - state.lastFrame;
+            state.lastFrame = now;
+            state.fallProgress += delta / DROP_INTERVAL;
+
+            while (state.fallProgress >= 1) {
+                state.fallProgress -= 1;
                 stepAutoplay();
                 drop();
             }
-            render();
+
+            render(state.fallProgress);
             requestAnimationFrame(loop);
         }
 
