@@ -178,8 +178,8 @@
 
             incoming.addEventListener("load", () => {
                 requestAnimationFrame(() => {
-                    incoming.style.transition = "transform 0.75s ease-in-out";
-                    outgoing.style.transition = "transform 0.75s ease-in-out";
+                    incoming.style.transition = "transform 1s ease-in-out";
+                    outgoing.style.transition = "transform 1s ease-in-out";
                     incoming.style.transform = "translate(0, 0)";
                     outgoing.style.transform = direction.outgoingEnd;
                 });
