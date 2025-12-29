@@ -67,7 +67,7 @@
 
         #board-shell {
             position: relative;
-            width: min(80vw, 420px, 42vh);
+            width: min(90vw, 480px, 44vh);
             aspect-ratio: 10 / 22;
             filter: drop-shadow(0 18px 50px rgba(0, 0, 0, 0.65));
             transform: perspective(900px) rotateX(12deg) rotateY(-8deg) scale(1);
@@ -227,10 +227,6 @@
         }
 
         .shake {
-            animation: slowSpin 26s ease-in-out infinite, quake 360ms cubic-bezier(0.18, 0.82, 0.35, 1);
-        }
-
-        .scene.shake {
             animation: quake 360ms cubic-bezier(0.18, 0.82, 0.35, 1);
         }
     </style>
@@ -818,11 +814,6 @@
             boardShell.classList.remove("shake");
             void boardShell.offsetWidth; // force reflow to restart animation
             boardShell.classList.add("shake");
-            if (scene) {
-                scene.classList.remove("shake");
-                void scene.offsetWidth;
-                scene.classList.add("shake");
-            }
         }
 
         function animate(t) {
