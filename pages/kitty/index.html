@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kitty Warning</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background-color: #000;
+            color: #fff;
+            font-family: 'Courier New', monospace;
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+        
+        .container {
+            width: 100%;
+            max-width: 1080px;
+            height: 100%;
+            max-height: 1920px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .message {
+            font-size: 8vw;
+            font-weight: bold;
+            line-height: 1.2;
+            letter-spacing: 1px;
+            margin-bottom: 4vh;
+        }
+        
+        .line {
+            display: block;
+            margin-bottom: 0.3em;
+        }
+        
+        .image-container {
+            margin-bottom: 4vh;
+            width: 40vw;
+            max-width: 500px;
+            height: auto;
+        }
+        
+        .kitty-image {
+            width: 100%;
+            height: auto;
+            border: 3px solid #fff;
+        }
+        
+        @media (min-height: 1080px) and (max-height: 1920px) {
+            .message {
+                font-size: 5.5rem;
+            }
+            .timer {
+                font-size: 8rem;
+            }
+            .image-container {
+                width: 60%;
+            }
+        }
+        
+        @media (min-width: 1080px) and (max-height: 1080px) {
+            .message {
+                font-size: 4.5rem;
+            }
+            .timer {
+                font-size: 6rem;
+            }
+            .image-container {
+                width: 40%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="message">
+            <span class="line">if you don't</span>
+            <span class="line">press big</span>
+            <span class="line">enter button</span>
+            <span class="line">in <span id="timer">??</span> sec the</span>
+            <span class="line">kitty will die</span>
+        </div>
+        
+        <div class="image-container">
+            <img src="./kitty.jpg" alt="Kitty" class="kitty-image" id="kitty-image">
+        </div>
+        
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tsparticles/confetti@3.0.3/tsparticles.confetti.bundle.min.js"></script>
+    <script>
+                let timeLeft = 15;
+                let enterPressed = false;
+
+                const timerElement = document.getElementById('timer');
+                const kittyImgElement = document.getElementById('kitty-image');
+                timerElement.textContent = timeLeft;
+
+                document.addEventListener('keydown', function(event) {
+                    if (event.key === 'Enter') {
+                            enterPressed = true;
+                    }});
+
+                const countdown = setInterval(() => {
+                    timeLeft--;
+                    timerElement.textContent = timeLeft;
+                    
+                    if (timeLeft <= 0) {
+                        clearInterval(countdown);
+                        timerElement.textContent = "0";
+                        kittyImgElement.src = './kitty.gif';
+                    }
+                    
+		    if (enterPressed) {
+                        clearInterval(countdown);
+
+			const duration = 15 * 1000,
+                        animationEnd = Date.now() + duration,
+                        defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
+
+                        function randomInRange(min, max) {
+                          return Math.random() * (max - min) + min;
+                        }
+                        
+                        const interval = setInterval(function() {
+                          const timeLeft = animationEnd - Date.now();
+                        
+                          if (timeLeft <= 0) {
+                            return clearInterval(interval);
+                          }
+                        
+                          const particleCount = 50 * (timeLeft / duration);
+                        
+                          // since particles fall down, start a bit higher than random
+                          confetti(
+                            Object.assign({}, defaults, {
+                              particleCount,
+                              origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 },
+                            })
+                          );
+                          confetti(
+                            Object.assign({}, defaults, {
+                              particleCount,
+                              origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 },
+                            })
+                          );
+                        }, 250);
+                     }
+                }, 1000);
+    </script>
+</body>
+</html>
