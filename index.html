@@ -282,6 +282,16 @@
             const isFormField = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT");
             if (isFormField) return;
 
+	    // send enter keypress event
+	    if (event.key === 'Enter') {
+            frames.forEach(frame => {
+                frame.contentWindow.postMessage({
+                    type: 'ENTER_PRESSED',
+                    value: true,
+                }, '*');
+            });
+	    }
+
             if (event.code === "Space" || event.key === " " || event.key === "ArrowRight") {
                 event.preventDefault();
                 nextPageNow();

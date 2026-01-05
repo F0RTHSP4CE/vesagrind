@@ -112,10 +112,12 @@
                 const timerElement = document.getElementById('timer');
                 const kittyImgElement = document.getElementById('kitty-image');
                 timerElement.textContent = timeLeft;
-
-                document.addEventListener('keydown', function(event) {
-                    enterPressed = true;
-                    });
+   
+		window.addEventListener('message', function(event) {
+			if (event.data.type === 'ENTER_PRESSED') {
+				enterPressed = event.data.value;
+			}
+		});
 
                 const countdown = setInterval(() => {
                     timeLeft--;
