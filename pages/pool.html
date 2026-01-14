@@ -9,18 +9,16 @@
         body {
             margin: 0;
             padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
+            overflow: hidden;
             background: linear-gradient(135deg, #0a0015 0%, #1a0033 50%, #0f001a 100%);
             font-family: 'Courier New', monospace;
         }
 
         #gameCanvas {
-            border: 5px solid #ff00ff;
+            display: block;
+            width: 100vw;
+            height: 100vh;
             background: #0a0020;
-            box-shadow: 0 0 40px rgba(255, 0, 255, 0.6), 0 0 80px rgba(0, 255, 255, 0.3);
         }
 
         #info {
@@ -51,9 +49,16 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
 
-        // Canvas size (optimized for vertical display)
-        canvas.width = 600;
-        canvas.height = 1000;
+        // Canvas size (full screen)
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // Resize handler
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            updateTableBoundaries();
+        });
 
         // Physics constants
         const FRICTION = 0.985;
@@ -64,22 +69,36 @@
         const MAX_POWER = 25;
 
         // Table boundaries
-        const TABLE = {
+        let TABLE = {
             x: 50,
             y: 50,
             width: canvas.width - 100,
             height: canvas.height - 100
         };
 
+        function updateTableBoundaries() {
+            TABLE.x = 50;
+            TABLE.y = 50;
+            TABLE.width = canvas.width - 100;
+            TABLE.height = canvas.height - 100;
+            updatePockets();
+        }
+
         // Pockets
-        const POCKETS = [
-            { x: TABLE.x, y: TABLE.y },
-            { x: TABLE.x + TABLE.width / 2, y: TABLE.y },
-            { x: TABLE.x + TABLE.width, y: TABLE.y },
-            { x: TABLE.x, y: TABLE.y + TABLE.height },
-            { x: TABLE.x + TABLE.width / 2, y: TABLE.y + TABLE.height },
-            { x: TABLE.x + TABLE.width, y: TABLE.y + TABLE.height }
-        ];
+        let POCKETS = [];
+
+        function updatePockets() {
+            POCKETS = [
+                { x: TABLE.x, y: TABLE.y },
+                { x: TABLE.x + TABLE.width / 2, y: TABLE.y },
+                { x: TABLE.x + TABLE.width, y: TABLE.y },
+                { x: TABLE.x, y: TABLE.y + TABLE.height },
+                { x: TABLE.x + TABLE.width / 2, y: TABLE.y + TABLE.height },
+                { x: TABLE.x + TABLE.width, y: TABLE.y + TABLE.height }
+            ];
+        }
+
+        updatePockets();
 
         class Ball {
             constructor(x, y, color, isCue = false) {
