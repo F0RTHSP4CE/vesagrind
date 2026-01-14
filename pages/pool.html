@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Pool Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #0a0015 0%, #1a0033 50%, #0f001a 100%);
+            font-family: 'Courier New', monospace;
+        }
+
+        #gameCanvas {
+            border: 5px solid #ff00ff;
+            background: #0a0020;
+            box-shadow: 0 0 40px rgba(255, 0, 255, 0.6), 0 0 80px rgba(0, 255, 255, 0.3);
+        }
+
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #00ffff;
+            background: rgba(10, 0, 30, 0.85);
+            padding: 15px;
+            border-radius: 5px;
+            border: 2px solid #ff00ff;
+            font-size: 14px;
+            text-shadow: 0 0 10px #00ffff;
+            box-shadow: 0 0 20px rgba(255, 0, 255, 0.5);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="info" style="display: none;">
+        <div>AI Pool Game</div>
+        <div id="status">Initializing...</div>
+        <div id="score">Balls remaining: 15</div>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Canvas size (optimized for vertical display)
+        canvas.width = 600;
+        canvas.height = 1000;
+
+        // Physics constants
+        const FRICTION = 0.985;
+        const BALL_RADIUS = 16;
+        const CUE_BALL_RADIUS = 16;
+        const POCKET_RADIUS = 20;
+        const MIN_VELOCITY = 0.05;
+        const MAX_POWER = 25;
+
+        // Table boundaries
+        const TABLE = {
+            x: 50,
+            y: 50,
+            width: canvas.width - 100,
+            height: canvas.height - 100
+        };
+
+        // Pockets
+        const POCKETS = [
+            { x: TABLE.x, y: TABLE.y },
+            { x: TABLE.x + TABLE.width / 2, y: TABLE.y },
+            { x: TABLE.x + TABLE.width, y: TABLE.y },
+            { x: TABLE.x, y: TABLE.y + TABLE.height },
+            { x: TABLE.x + TABLE.width / 2, y: TABLE.y + TABLE.height },
+            { x: TABLE.x + TABLE.width, y: TABLE.y + TABLE.height }
+        ];
+
+        class Ball {
+            constructor(x, y, color, isCue = false) {
+                this.x = x;
+                this.y = y;
+                this.vx = 0;
+                this.vy = 0;
+                this.radius = isCue ? CUE_BALL_RADIUS : BALL_RADIUS;
+                this.color = color;
+                this.isCue = isCue;
+                this.active = true;
+                this.number = isCue ? 0 : null;
+            }
+
+            update() {
+                if (!this.active) return;
+
+                this.x += this.vx;
+                this.y += this.vy;
+
+                // Apply friction
+                this.vx *= FRICTION;
+                this.vy *= FRICTION;
+
+                // Stop if moving too slowly
+                if (Math.abs(this.vx) < MIN_VELOCITY) this.vx = 0;
+                if (Math.abs(this.vy) < MIN_VELOCITY) this.vy = 0;
+
+                // Wall collisions
+                if (this.x - this.radius < TABLE.x) {
+                    this.x = TABLE.x + this.radius;
+                    this.vx = -this.vx * 0.8;
+                }
+                if (this.x + this.radius > TABLE.x + TABLE.width) {
+                    this.x = TABLE.x + TABLE.width - this.radius;
+                    this.vx = -this.vx * 0.8;
+                }
+                if (this.y - this.radius < TABLE.y) {
+                    this.y = TABLE.y + this.radius;
+                    this.vy = -this.vy * 0.8;
+                }
+                if (this.y + this.radius > TABLE.y + TABLE.height) {
+                    this.y = TABLE.y + TABLE.height - this.radius;
+                    this.vy = -this.vy * 0.8;
+                }
+            }
+
+            draw() {
+                if (!this.active) return;
+
+                // Neon glow
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius + 2, 0, Math.PI * 2);
+                ctx.fillStyle = this.color + '40';
+                ctx.fill();
+
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                ctx.strokeStyle = this.isCue ? '#00ffff' : '#000';
+                ctx.lineWidth = this.isCue ? 2 : 1;
+                ctx.stroke();
+
+                // Draw number
+                if (this.number !== null) {
+                    ctx.fillStyle = '#fff';
+                    ctx.font = 'bold 10px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(this.number, this.x, this.y);
+                }
+            }
+
+            isMoving() {
+                return Math.abs(this.vx) > MIN_VELOCITY || Math.abs(this.vy) > MIN_VELOCITY;
+            }
+        }
+
+        class PoolGame {
+            constructor() {
+                this.balls = [];
+                this.cueBall = null;
+                this.aiState = 'waiting'; // waiting, aiming, shooting, exploding
+                this.aimAngle = 0;
+                this.targetAimAngle = 0;
+                this.aimPower = MAX_POWER;
+                this.aimTime = 0;
+                this.aimAdjustmentTimer = 0;
+                this.shootDelay = 0;
+                this.reflections = [];
+                this.explosion = null; // {x, y, radius, maxRadius, ball}
+                this.explosionDelay = 0;
+
+                this.initBalls();
+            }
+
+            initBalls() {
+                this.balls = [];
+
+                // Create cue ball at random position on bottom side
+                const cueX = TABLE.x + TABLE.width / 2 + (Math.random() - 0.5) * 80;
+                const cueY = TABLE.y + TABLE.height - 150 - Math.random() * 100;
+                this.cueBall = new Ball(cueX, cueY, '#fff', true);
+                this.balls.push(this.cueBall);
+
+                // Create triangle of balls with random positions (loosely arranged)
+                const colors = ['#ff00ff', '#00ffff', '#ff0080', '#00ff88', '#ffff00', '#ff0040', '#8000ff', '#ff6600'];
+                const startX = TABLE.x + TABLE.width / 2;
+                const startY = TABLE.y + 250;
+
+                let ballNum = 1;
+                for (let row = 0; row < 5; row++) {
+                    for (let col = 0; col <= row; col++) {
+                        const x = startX + (col - row / 2) * BALL_RADIUS * 2.2 + (Math.random() - 0.5) * 10;
+                        const y = startY + row * BALL_RADIUS * 2.2 + (Math.random() - 0.5) * 10;
+                        const color = colors[(ballNum - 1) % colors.length];
+                        const ball = new Ball(x, y, color);
+                        ball.number = ballNum;
+                        this.balls.push(ball);
+                        ballNum++;
+                    }
+                }
+            }
+
+            checkCollisions() {
+                // Ball-ball collisions
+                for (let i = 0; i < this.balls.length; i++) {
+                    if (!this.balls[i].active) continue;
+
+                    for (let j = i + 1; j < this.balls.length; j++) {
+                        if (!this.balls[j].active) continue;
+
+                        const dx = this.balls[j].x - this.balls[i].x;
+                        const dy = this.balls[j].y - this.balls[i].y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        const minDist = this.balls[i].radius + this.balls[j].radius;
+
+                        if (distance < minDist) {
+                            // Collision response
+                            const angle = Math.atan2(dy, dx);
+                            const sin = Math.sin(angle);
+                            const cos = Math.cos(angle);
+
+                            // Rotate velocities
+                            const vx1 = this.balls[i].vx * cos + this.balls[i].vy * sin;
+                            const vy1 = this.balls[i].vy * cos - this.balls[i].vx * sin;
+                            const vx2 = this.balls[j].vx * cos + this.balls[j].vy * sin;
+                            const vy2 = this.balls[j].vy * cos - this.balls[j].vx * sin;
+
+                            // Swap velocities
+                            const tempVx = vx1;
+                            const vx1Final = vx2;
+                            const vx2Final = tempVx;
+
+                            // Rotate back
+                            this.balls[i].vx = vx1Final * cos - vy1 * sin;
+                            this.balls[i].vy = vy1 * cos + vx1Final * sin;
+                            this.balls[j].vx = vx2Final * cos - vy2 * sin;
+                            this.balls[j].vy = vy2 * cos + vx2Final * sin;
+
+                            // Separate balls
+                            const overlap = minDist - distance;
+                            const separateX = overlap * cos / 2;
+                            const separateY = overlap * sin / 2;
+                            this.balls[i].x -= separateX;
+                            this.balls[i].y -= separateY;
+                            this.balls[j].x += separateX;
+                            this.balls[j].y += separateY;
+                        }
+                    }
+                }
+
+                // Check pockets
+                for (let ball of this.balls) {
+                    if (!ball.active) continue;
+
+                    for (let pocket of POCKETS) {
+                        const dx = ball.x - pocket.x;
+                        const dy = ball.y - pocket.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+
+                        if (distance < POCKET_RADIUS) {
+                            ball.active = false;
+                            if (ball.isCue) {
+                                // Reset cue ball
+                                setTimeout(() => {
+                                    ball.active = true;
+                                    ball.x = TABLE.x + TABLE.width / 2 + (Math.random() - 0.5) * 80;
+                                    ball.y = TABLE.y + TABLE.height - 150 - Math.random() * 100;
+                                    ball.vx = 0;
+                                    ball.vy = 0;
+                                }, 500);
+                            }
+                        }
+                    }
+                }
+            }
+
+            calculateReflection(x, y, angle, power, maxBounces = 3) {
+                const reflections = [];
+                let currentX = x;
+                let currentY = y;
+                let currentAngle = angle;
+                let remainingPower = power;
+
+                for (let bounce = 0; bounce < maxBounces; bounce++) {
+                    let dx = Math.cos(currentAngle);
+                    let dy = Math.sin(currentAngle);
+
+                    // Calculate distance to each wall
+                    let minDist = Infinity;
+                    let hitWall = null;
+
+                    // Left wall
+                    if (dx < 0) {
+                        let dist = (currentX - TABLE.x) / -dx;
+                        if (dist > 0 && dist < minDist) {
+                            minDist = dist;
+                            hitWall = 'left';
+                        }
+                    }
+                    // Right wall
+                    if (dx > 0) {
+                        let dist = (TABLE.x + TABLE.width - currentX) / dx;
+                        if (dist > 0 && dist < minDist) {
+                            minDist = dist;
+                            hitWall = 'right';
+                        }
+                    }
+                    // Top wall
+                    if (dy < 0) {
+                        let dist = (currentY - TABLE.y) / -dy;
+                        if (dist > 0 && dist < minDist) {
+                            minDist = dist;
+                            hitWall = 'top';
+                        }
+                    }
+                    // Bottom wall
+                    if (dy > 0) {
+                        let dist = (TABLE.y + TABLE.height - currentY) / dy;
+                        if (dist > 0 && dist < minDist) {
+                            minDist = dist;
+                            hitWall = 'bottom';
+                        }
+                    }
+
+                    // Calculate end point
+                    let endX = currentX + dx * minDist;
+                    let endY = currentY + dy * minDist;
+
+                    reflections.push({
+                        startX: currentX,
+                        startY: currentY,
+                        endX: endX,
+                        endY: endY,
+                        power: remainingPower
+                    });
+
+                    // Prepare for next bounce
+                    currentX = endX;
+                    currentY = endY;
+
+                    if (hitWall === 'left' || hitWall === 'right') {
+                        currentAngle = Math.PI - currentAngle;
+                    } else {
+                        currentAngle = -currentAngle;
+                    }
+
+                    remainingPower *= 0.6;
+                    if (remainingPower < 1) break;
+                }
+
+                return reflections;
+            }
+
+            updateAI() {
+                // Only act when all balls have stopped
+                const allStopped = this.balls.every(ball => !ball.isMoving());
+                if (!allStopped) {
+                    this.aiState = 'waiting';
+                    this.explosionDelay = 0;
+                    return;
+                }
+
+                if (!this.cueBall.active) {
+                    this.aiState = 'waiting';
+                    return;
+                }
+
+                if (this.aiState === 'waiting') {
+                    this.shootDelay++;
+                    if (this.shootDelay > 30) { // Wait 0.5 second before explosion
+                        this.aiState = 'exploding';
+                        this.shootDelay = 0;
+                    }
+                } else if (this.aiState === 'exploding') {
+                    this.explosionDelay++;
+
+                    if (this.explosionDelay === 1) {
+                        // Select random active ball to explode (not cue ball)
+                        const activeBalls = this.balls.filter(b => b.active && !b.isCue);
+                        if (activeBalls.length > 0) {
+                            const targetBall = activeBalls[Math.floor(Math.random() * activeBalls.length)];
+                            const emojis = ['💥'];
+                            this.explosion = {
+                                x: targetBall.x,
+                                y: targetBall.y,
+                                radius: 0,
+                                maxRadius: 120,
+                                ball: targetBall,
+                                emoji: emojis[Math.floor(Math.random() * emojis.length)]
+                            };
+                            targetBall.active = false;
+                        }
+                    }
+
+                    if (this.explosion) {
+                        // Expand shockwave
+                        this.explosion.radius += 8;
+
+                        // Apply force to balls within shockwave
+                        const shockwaveThickness = 15;
+                        for (let ball of this.balls) {
+                            if (!ball.active || ball === this.explosion.ball) continue;
+
+                            const dx = ball.x - this.explosion.x;
+                            const dy = ball.y - this.explosion.y;
+                            const dist = Math.sqrt(dx * dx + dy * dy);
+
+                            // Check if ball is at the edge of expanding shockwave
+                            if (dist > this.explosion.radius - shockwaveThickness && dist < this.explosion.radius + shockwaveThickness) {
+                                const force = 12 * (1 - dist / this.explosion.maxRadius);
+                                const angle = Math.atan2(dy, dx);
+                                ball.vx += Math.cos(angle) * force;
+                                ball.vy += Math.sin(angle) * force;
+                            }
+                        }
+
+                        // End explosion when max radius reached
+                        if (this.explosion.radius >= this.explosion.maxRadius) {
+                            this.explosion = null;
+                            this.explosionDelay = 0;
+                            this.aiState = 'aiming';
+                            this.aimTime = 0;
+
+                            // Find target for next shot
+                            let nearestBall = null;
+                            let minDist = Infinity;
+
+                            for (let ball of this.balls) {
+                                if (!ball.active || ball.isCue) continue;
+                                const dx = ball.x - this.cueBall.x;
+                                const dy = ball.y - this.cueBall.y;
+                                const dist = Math.sqrt(dx * dx + dy * dy);
+                                if (dist < minDist) {
+                                    minDist = dist;
+                                    nearestBall = ball;
+                                }
+                            }
+
+                            if (nearestBall) {
+                                this.targetAimAngle = Math.atan2(
+                                    nearestBall.y - this.cueBall.y,
+                                    nearestBall.x - this.cueBall.x
+                                );
+                                this.aimAngle = this.targetAimAngle;
+                            } else {
+                                this.targetAimAngle = Math.random() * Math.PI * 2;
+                                this.aimAngle = this.targetAimAngle;
+                            }
+                        }
+                    }
+                } else if (this.aiState === 'aiming') {
+                    this.aimTime++;
+                    this.aimAdjustmentTimer++;
+
+                    // Periodically make small adjustments to target angle
+                    if (this.aimAdjustmentTimer > 20 + Math.random() * 20) {
+                        this.aimAdjustmentTimer = 0;
+                        const adjustment = (Math.random() - 0.5) * 0.15;
+                        this.targetAimAngle += adjustment;
+                    }
+
+                    // Smooth interpolation towards target angle
+                    const angleDiff = this.targetAimAngle - this.aimAngle;
+                    // Normalize angle difference to [-PI, PI]
+                    const normalizedDiff = Math.atan2(Math.sin(angleDiff), Math.cos(angleDiff));
+                    this.aimAngle += normalizedDiff * 0.08;
+
+                    // Add subtle oscillation for organic feel
+                    const wobble = Math.sin(this.aimTime * 0.1) * 0.01;
+                    const currentAngle = this.aimAngle + wobble;
+
+                    // Calculate reflections for laser pointer
+                    this.reflections = this.calculateReflection(
+                        this.cueBall.x,
+                        this.cueBall.y,
+                        currentAngle,
+                        this.aimPower
+                    );
+
+                    if (this.aimTime > 120) { // Aim for 2 seconds
+                        this.aiState = 'shooting';
+                    }
+                } else if (this.aiState === 'shooting') {
+                    // Shoot
+                    this.cueBall.vx = Math.cos(this.aimAngle) * this.aimPower;
+                    this.cueBall.vy = Math.sin(this.aimAngle) * this.aimPower;
+                    this.aiState = 'waiting';
+                    this.reflections = [];
+                }
+            }
+
+            update() {
+                this.updateAI();
+
+                for (let ball of this.balls) {
+                    ball.update();
+                }
+
+                this.checkCollisions();
+            }
+
+            draw() {
+                // Clear canvas
+                ctx.fillStyle = '#0a0020';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // Draw table
+                ctx.fillStyle = '#150033';
+                ctx.fillRect(TABLE.x, TABLE.y, TABLE.width, TABLE.height);
+
+                // Draw border
+                const gradient = ctx.createLinearGradient(TABLE.x, TABLE.y, TABLE.x + TABLE.width, TABLE.y + TABLE.height);
+                gradient.addColorStop(0, '#ff00ff');
+                gradient.addColorStop(0.5, '#00ffff');
+                gradient.addColorStop(1, '#ff00ff');
+                ctx.strokeStyle = gradient;
+                ctx.lineWidth = 12;
+                ctx.strokeRect(TABLE.x - 5, TABLE.y - 5, TABLE.width + 10, TABLE.height + 10);
+
+                // Draw inner glow
+                ctx.strokeStyle = 'rgba(255, 0, 255, 0.3)';
+                ctx.lineWidth = 4;
+                ctx.strokeRect(TABLE.x + 5, TABLE.y + 5, TABLE.width - 10, TABLE.height - 10);
+
+                // Draw pockets
+                for (let pocket of POCKETS) {
+                    // Outer glow
+                    ctx.beginPath();
+                    ctx.arc(pocket.x, pocket.y, POCKET_RADIUS + 5, 0, Math.PI * 2);
+                    const pocketGradient = ctx.createRadialGradient(pocket.x, pocket.y, 0, pocket.x, pocket.y, POCKET_RADIUS + 5);
+                    pocketGradient.addColorStop(0, 'rgba(255, 0, 255, 0.6)');
+                    pocketGradient.addColorStop(1, 'rgba(0, 255, 255, 0.2)');
+                    ctx.fillStyle = pocketGradient;
+                    ctx.fill();
+
+                    // Pocket hole
+                    ctx.beginPath();
+                    ctx.arc(pocket.x, pocket.y, POCKET_RADIUS, 0, Math.PI * 2);
+                    ctx.fillStyle = '#000';
+                    ctx.fill();
+                    ctx.strokeStyle = '#ff00ff';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+
+                // Draw laser pointer reflections
+                if (this.aiState === 'aiming' && this.reflections.length > 0) {
+                    for (let i = 0; i < this.reflections.length; i++) {
+                        const ref = this.reflections[i];
+                        const alpha = 0.8 - i * 0.2;
+
+                        // Draw laser line
+                        ctx.strokeStyle = `rgba(0, 255, 255, ${alpha})`;
+                        ctx.lineWidth = 3;
+                        ctx.setLineDash([5, 5]);
+                        ctx.beginPath();
+                        ctx.moveTo(ref.startX, ref.startY);
+                        ctx.lineTo(ref.endX, ref.endY);
+                        ctx.stroke();
+                        ctx.setLineDash([]);
+
+                        // Draw glow
+                        ctx.strokeStyle = `rgba(0, 255, 255, ${alpha * 0.6})`;
+                        ctx.lineWidth = 10;
+                        ctx.beginPath();
+                        ctx.moveTo(ref.startX, ref.startY);
+                        ctx.lineTo(ref.endX, ref.endY);
+                        ctx.stroke();
+
+                        // Draw reflection point
+                        if (i < this.reflections.length - 1) {
+                            ctx.beginPath();
+                            ctx.arc(ref.endX, ref.endY, 4, 0, Math.PI * 2);
+                            ctx.fillStyle = `rgba(0, 255, 255, ${alpha})`;
+                            ctx.fill();
+                            ctx.strokeStyle = `rgba(255, 0, 255, ${alpha})`;
+                            ctx.lineWidth = 2;
+                            ctx.stroke();
+                        }
+                    }
+                }
+
+                // Draw balls
+                for (let ball of this.balls) {
+                    ball.draw();
+                }
+
+                // Draw explosion
+                if (this.explosion) {
+                    const progress = this.explosion.radius / this.explosion.maxRadius;
+                    const alpha = 1 - progress;
+
+                    // Draw expanding emoji
+                    ctx.save();
+                    ctx.translate(this.explosion.x, this.explosion.y);
+
+                    // Rotate emoji for effect
+                    ctx.rotate(progress * Math.PI * 4);
+
+                    // Scale emoji based on explosion progress
+                    const scale = 1 + progress * 3;
+                    ctx.scale(scale, scale);
+
+                    ctx.globalAlpha = alpha;
+                    ctx.font = '48px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(this.explosion.emoji, 0, 0);
+
+                    ctx.restore();
+
+                    // Outer shockwave ring (keep for visual feedback)
+                    ctx.beginPath();
+                    ctx.arc(this.explosion.x, this.explosion.y, this.explosion.radius, 0, Math.PI * 2);
+                    ctx.strokeStyle = `rgba(255, 0, 255, ${alpha * 0.5})`;
+                    ctx.lineWidth = 4;
+                    ctx.stroke();
+
+                    // Inner glow ring
+                    if (this.explosion.radius > 10) {
+                        ctx.beginPath();
+                        ctx.arc(this.explosion.x, this.explosion.y, this.explosion.radius - 10, 0, Math.PI * 2);
+                        ctx.strokeStyle = `rgba(0, 255, 255, ${alpha * 0.4})`;
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+                    }
+                }
+
+                // Draw aim indicator
+                if (this.aiState === 'aiming') {
+                    // Outer glow
+                    ctx.beginPath();
+                    ctx.arc(this.cueBall.x, this.cueBall.y, this.cueBall.radius + 10, 0, Math.PI * 2);
+                    ctx.strokeStyle = 'rgba(255, 0, 255, 0.3)';
+                    ctx.lineWidth = 6;
+                    ctx.stroke();
+
+                    // Inner ring
+                    ctx.beginPath();
+                    ctx.arc(this.cueBall.x, this.cueBall.y, this.cueBall.radius + 5, 0, Math.PI * 2);
+                    ctx.strokeStyle = 'rgba(255, 0, 255, 0.9)';
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                }
+
+                // Update status
+                const activeBalls = this.balls.filter(b => b.active && !b.isCue).length;
+                const stateText = this.aiState === 'exploding' ? 'EXPLODING!' : this.aiState;
+                document.getElementById('status').textContent = `AI State: ${stateText}`;
+                document.getElementById('score').textContent = `Balls remaining: ${activeBalls}`;
+            }
+        }
+
+        // Game instance
+        const game = new PoolGame();
+
+        // Game loop
+        function gameLoop() {
+            game.update();
+            game.draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        gameLoop();
+    </script>
+</body>
+
+</html>
