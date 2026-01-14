@@ -106,6 +106,7 @@
             "pages/tetris.html",
             "pages/kitty/index.html",
             "pages/cartpole.html",
+            "https://updatefaker.com/windows10/index.html",
         ];
 
         const INTERVAL_MS = 30_000; // 30 seconds
@@ -283,15 +284,15 @@
             const isFormField = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT");
             if (isFormField) return;
 
-	    // send enter keypress event
-	    if (event.key === 'Enter') {
-            frames.forEach(frame => {
-                frame.contentWindow.postMessage({
-                    type: 'ENTER_PRESSED',
-                    value: true,
-                }, '*');
-            });
-	    }
+            // send enter keypress event
+            if (event.key === 'Enter') {
+                frames.forEach(frame => {
+                    frame.contentWindow.postMessage({
+                        type: 'ENTER_PRESSED',
+                        value: true,
+                    }, '*');
+                });
+            }
 
             if (event.code === "Space" || event.key === " " || event.key === "ArrowRight") {
                 event.preventDefault();
