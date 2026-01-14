@@ -20,14 +20,12 @@
     }
     .wrap{
       display:grid;
-      grid-template-columns: minmax(320px, 42vw) 1fr;
+      grid-template-columns: 1fr;
+      grid-template-rows: auto auto;
       gap:18px;
       padding:18px;
       box-sizing:border-box;
       height:100%;
-    }
-    @media (max-width: 960px){
-      .wrap{ grid-template-columns: 1fr; grid-template-rows: auto auto; }
     }
     .panel{
       border:1px solid var(--line);
