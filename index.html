@@ -27,40 +27,6 @@
             color: #fff;
         }
 
-        #header {
-            padding: 6px 12px;
-            font-size: 14px;
-            color: #606060aa;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 10;
-        }
-
-        #status {
-            font-size: 12px;
-        }
-
-        #controls {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        #page-select {
-            font-size: 12px;
-            background: #33333369;
-            color: #606060aa;
-            border: 1px solid #333;
-            border-radius: 3px;
-            padding: 2px 4px;
-        }
-
         #frame-wrapper {
             flex: 1;
             min-height: 0;
@@ -83,14 +49,6 @@
 
 <body>
     <div id="container">
-        <div id="header">
-            <div>F0RTHSP4CE VESAGRIND</div>
-            <div id="controls">
-                <label for="page-select">Page:</label>
-                <select id="page-select"></select>
-                <div id="status">Loading...</div>
-            </div>
-        </div>
         <div id="frame-wrapper">
             <iframe class="frame-layer" id="frame-a" src="about:blank"></iframe>
             <iframe class="frame-layer" id="frame-b" src="about:blank"></iframe>
