@@ -1,0 +1,1185 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>CartPole</title>
+  <style>
+    :root{
+      --bg:#000;
+      --fg:#e8e8e8;
+      --line:#111;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+    html,body{
+      height:100%;
+      margin:0;
+      background:var(--bg);
+      color:var(--fg);
+      font-family:var(--mono);
+    }
+    .wrap{
+      display:grid;
+      grid-template-columns: minmax(320px, 42vw) 1fr;
+      gap:18px;
+      padding:18px;
+      box-sizing:border-box;
+      height:100%;
+    }
+    @media (max-width: 960px){
+      .wrap{ grid-template-columns: 1fr; grid-template-rows: auto auto; }
+    }
+    .panel{
+      border:1px solid var(--line);
+      border-radius:12px;
+      background:#000;
+      overflow:hidden;
+      min-height:280px;
+    }
+    canvas, svg{
+      display:block;
+      width:100%;
+      height:100%;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="panel">
+      <canvas id="simCanvas" width="640" height="360"></canvas>
+    </div>
+    <div class="panel">
+      <svg id="netSvg" width="760" height="340" viewBox="0 0 760 340" role="img" aria-label="Network visualization"></svg>
+    </div>
+  </div>
+  <script>
+function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
+function randn(){
+  let u=0, v=0;
+  while(u===0) u=Math.random();
+  while(v===0) v=Math.random();
+  return Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v);
+}
+function softmax2(a,b){
+  const m = Math.max(a,b);
+  const ea = Math.exp(a-m), eb = Math.exp(b-m);
+  const s = ea+eb;
+  return [ea/s, eb/s];
+}
+function logSumExp2(a,b){
+  const m = Math.max(a,b);
+  return m + Math.log(Math.exp(a-m) + Math.exp(b-m));
+}
+function shuffleInPlace(arr){
+  for(let i=arr.length-1;i>0;i--){
+    const j = (Math.random()*(i+1))|0;
+    [arr[i],arr[j]] = [arr[j],arr[i]];
+  }
+}
+function deepCopyJSON(x){ return JSON.parse(JSON.stringify(x)); }
+
+class CartPole {
+  constructor(){
+    this.gravity = 9.8;
+    this.massCart = 1.0;
+    this.massPole = 0.1;
+    this.totalMass = this.massCart + this.massPole;
+    this.length = 0.5;
+    this.poleMassLength = this.massPole * this.length;
+    this.forceMag = 10.0;
+    this.tau = 0.02;
+
+    this.xThreshold = 2.4;
+    this.thetaThresholdRadians = 12 * Math.PI / 180;
+
+    this.maxSteps = 500;
+    this.state = [0,0,0,0];
+    this.steps = 0;
+  }
+  reset(){
+    this.state = [randn()*0.05, randn()*0.05, randn()*0.05, randn()*0.05];
+    this.steps = 0;
+    return this.state.slice();
+  }
+  step(action){
+    const [x, xDot, theta, thetaDot] = this.state;
+    const force = (action===1 ? this.forceMag : -this.forceMag);
+    const cosT = Math.cos(theta);
+    const sinT = Math.sin(theta);
+
+    const temp = (force + this.poleMassLength * thetaDot*thetaDot * sinT) / this.totalMass;
+    const thetaAcc = (this.gravity * sinT - cosT * temp) /
+      (this.length * (4.0/3.0 - this.massPole * cosT*cosT / this.totalMass));
+    const xAcc = temp - this.poleMassLength * thetaAcc * cosT / this.totalMass;
+
+    const xNew = x + this.tau * xDot;
+    const xDotNew = xDot + this.tau * xAcc;
+    const thetaNew = theta + this.tau * thetaDot;
+    const thetaDotNew = thetaDot + this.tau * thetaAcc;
+
+    this.state = [xNew, xDotNew, thetaNew, thetaDotNew];
+    this.steps += 1;
+
+    const done =
+      xNew < -this.xThreshold || xNew > this.xThreshold ||
+      thetaNew < -this.thetaThresholdRadians || thetaNew > this.thetaThresholdRadians ||
+      this.steps >= this.maxSteps;
+
+    const reward = done ? 0 : 1;
+    return { obs: this.state.slice(), reward, done };
+  }
+}
+
+class ActorCriticNet {
+  constructor(inputSize=4, hidden1=64, hidden2=64){
+    this.inputSize = inputSize;
+    this.hidden1 = hidden1;
+    this.hidden2 = hidden2;
+
+    this.W1 = this._randMat(hidden1, inputSize, 0.06);
+    this.b1 = new Array(hidden1).fill(0);
+
+    this.W2 = this._randMat(hidden2, hidden1, 0.06);
+    this.b2 = new Array(hidden2).fill(0);
+
+    this.Wa = this._randMat(2, hidden2, 0.06);
+    this.ba = [0,0];
+
+    this.Wv = this._randMat(1, hidden2, 0.06);
+    this.bv = [0];
+
+    this.last = {
+      obs: new Array(inputSize).fill(0),
+      obsNorm: new Array(inputSize).fill(0),
+      h1Pre: new Array(hidden1).fill(0),
+      h1: new Array(hidden1).fill(0),
+      h2Pre: new Array(hidden2).fill(0),
+      h2: new Array(hidden2).fill(0),
+      logits: [0,0],
+      probs: [0.5,0.5],
+      value: 0
+    };
+  }
+
+  _randMat(r,c,scale){
+    return Array.from({length:r}, ()=>Array.from({length:c}, ()=>randn()*scale));
+  }
+  _zeroMat(r,c){
+    return Array.from({length:r}, ()=>Array.from({length:c}, ()=>0));
+  }
+  _matVec(W, x){
+    const out = new Array(W.length).fill(0);
+    for(let i=0;i<W.length;i++){
+      let s=0; const row=W[i];
+      for(let j=0;j<row.length;j++) s += row[j]*x[j];
+      out[i]=s;
+    }
+    return out;
+  }
+  _tanhVec(v){ return v.map(z=>Math.tanh(z)); }
+
+  normalizeObs(obs){
+    const [x, xDot, theta, thetaDot] = obs;
+    
+    return [
+      x / 2.4,
+      xDot / 3.0,
+      theta / (12*Math.PI/180),
+      thetaDot / 3.5
+    ].map(v => clamp(v, -3.0, 3.0));
+  }
+
+  forward(obs){
+    const x = this.normalizeObs(obs);
+    const h1Pre = this._matVec(this.W1, x).map((v,i)=>v + this.b1[i]);
+    const h1 = this._tanhVec(h1Pre);
+    const h2Pre = this._matVec(this.W2, h1).map((v,i)=>v + this.b2[i]);
+    const h2 = this._tanhVec(h2Pre);
+
+    const logits = this._matVec(this.Wa, h2).map((v,i)=>v + this.ba[i]);
+    const probs = softmax2(logits[0], logits[1]);
+
+    const value = (this._matVec(this.Wv, h2)[0] + this.bv[0]);
+
+    this.last = { obs: obs.slice(), obsNorm: x, h1Pre, h1, h2Pre, h2, logits, probs, value };
+    return { probs, logits, value };
+  }
+
+  forwardCache(obs){
+    
+    const x = this.normalizeObs(obs);
+    const h1Pre = this._matVec(this.W1, x).map((v,i)=>v + this.b1[i]);
+    const h1 = this._tanhVec(h1Pre);
+    const h2Pre = this._matVec(this.W2, h1).map((v,i)=>v + this.b2[i]);
+    const h2 = this._tanhVec(h2Pre);
+
+    const logits = this._matVec(this.Wa, h2).map((v,i)=>v + this.ba[i]);
+    const probs = softmax2(logits[0], logits[1]);
+    const lse = logSumExp2(logits[0], logits[1]);
+
+    const value = (this._matVec(this.Wv, h2)[0] + this.bv[0]);
+
+    return { x, h1Pre, h1, h2Pre, h2, logits, probs, logSumExp: lse, value };
+  }
+
+  sampleAction(probs){
+    const r = Math.random();
+    return (r < probs[0]) ? 0 : 1;
+  }
+  greedyAction(probs){
+    return probs[0] >= probs[1] ? 0 : 1;
+  }
+
+  reinit(){
+    this.W1 = this._randMat(this.hidden1, this.inputSize, 0.06);
+    this.b1 = new Array(this.hidden1).fill(0);
+    this.W2 = this._randMat(this.hidden2, this.hidden1, 0.06);
+    this.b2 = new Array(this.hidden2).fill(0);
+    this.Wa = this._randMat(2, this.hidden2, 0.06);
+    this.ba = [0,0];
+    this.Wv = this._randMat(1, this.hidden2, 0.06);
+    this.bv = [0];
+  }
+
+  loadHeuristicPretrained(){
+    
+    
+    const H1 = this.hidden1, H2 = this.hidden2, I = this.inputSize;
+    const zeros1 = this._zeroMat(H1, I);
+    const zeros2 = this._zeroMat(H2, H1);
+    const Wa = this._zeroMat(2, H2);
+    const Wv = this._zeroMat(1, H2);
+    const b1 = new Array(H1).fill(0);
+    const b2 = new Array(H2).fill(0);
+    const ba = [0,0];
+    const bv = [0];
+
+    
+    for(let k=0;k<4;k++) zeros1[k][k] = 1.0;
+
+    
+    for(let k=0;k<4;k++) zeros2[k][k] = 1.0;
+
+    
+    
+    const w = [0.15, 0.08, 2.2, 1.0];
+    for(let k=0;k<4;k++){
+      Wa[0][k] = -w[k];
+      Wa[1][k] =  w[k];
+    }
+
+    this.W1 = zeros1; this.b1 = b1;
+    this.W2 = zeros2; this.b2 = b2;
+    this.Wa = Wa; this.ba = ba;
+    this.Wv = Wv; this.bv = bv;
+  }
+
+  getParams(){
+    return {
+      version: 2,
+      arch: { inputSize: this.inputSize, hidden1: this.hidden1, hidden2: this.hidden2 },
+      W1: deepCopyJSON(this.W1), b1: deepCopyJSON(this.b1),
+      W2: deepCopyJSON(this.W2), b2: deepCopyJSON(this.b2),
+      Wa: deepCopyJSON(this.Wa), ba: deepCopyJSON(this.ba),
+      Wv: deepCopyJSON(this.Wv), bv: deepCopyJSON(this.bv),
+    };
+  }
+
+  setParams(p){
+    const isFiniteNum = (x)=> Number.isFinite(x) && Math.abs(x) < 1e9;
+    const isVec = (v,n)=> Array.isArray(v) && v.length===n && v.every(isFiniteNum);
+    const isMat = (m,r,c)=> Array.isArray(m) && m.length===r && m.every(row => Array.isArray(row) && row.length===c && row.every(isFiniteNum));
+
+    if(!p || typeof p !== "object") throw new Error("Model JSON is not an object.");
+    if(!p.arch) throw new Error("Missing arch field.");
+    const {inputSize, hidden1, hidden2} = p.arch;
+    if(inputSize !== this.inputSize || hidden1 !== this.hidden1 || hidden2 !== this.hidden2){
+      throw new Error(`Shape mismatch. Expected arch 4-${this.hidden1}-${this.hidden2}, got ${inputSize}-${hidden1}-${hidden2}.`);
+    }
+    if(!isMat(p.W1, hidden1, inputSize)) throw new Error("W1 invalid shape/values.");
+    if(!isVec(p.b1, hidden1)) throw new Error("b1 invalid shape/values.");
+    if(!isMat(p.W2, hidden2, hidden1)) throw new Error("W2 invalid shape/values.");
+    if(!isVec(p.b2, hidden2)) throw new Error("b2 invalid shape/values.");
+    if(!isMat(p.Wa, 2, hidden2)) throw new Error("Wa invalid shape/values.");
+    if(!isVec(p.ba, 2)) throw new Error("ba invalid shape/values.");
+    if(!isMat(p.Wv, 1, hidden2)) throw new Error("Wv invalid shape/values.");
+    if(!isVec(p.bv, 1)) throw new Error("bv invalid shape/values.");
+
+    this.W1 = deepCopyJSON(p.W1); this.b1 = deepCopyJSON(p.b1);
+    this.W2 = deepCopyJSON(p.W2); this.b2 = deepCopyJSON(p.b2);
+    this.Wa = deepCopyJSON(p.Wa); this.ba = deepCopyJSON(p.ba);
+    this.Wv = deepCopyJSON(p.Wv); this.bv = deepCopyJSON(p.bv);
+  }
+}
+
+class Adam {
+  constructor(net){
+    this.beta1 = 0.9;
+    this.beta2 = 0.999;
+    this.eps = 1e-8;
+    this.t = 0;
+
+    this.m = this._zerosLike(net);
+    this.v = this._zerosLike(net);
+  }
+
+  _zerosLike(net){
+    const zerosMat = (M)=>M.map(row=>row.map(()=>0));
+    const zerosVec = (V)=>V.map(()=>0);
+    return {
+      W1: zerosMat(net.W1), b1: zerosVec(net.b1),
+      W2: zerosMat(net.W2), b2: zerosVec(net.b2),
+      Wa: zerosMat(net.Wa), ba: zerosVec(net.ba),
+      Wv: zerosMat(net.Wv), bv: zerosVec(net.bv),
+    };
+  }
+
+  reset(net){
+    this.t = 0;
+    this.m = this._zerosLike(net);
+    this.v = this._zerosLike(net);
+  }
+
+  step(net, grads, lr){
+    this.t += 1;
+    const b1 = this.beta1, b2 = this.beta2, eps = this.eps;
+    const t = this.t;
+
+    function updScalar(param, g, mRef, vRef){
+      mRef.value = b1*mRef.value + (1-b1)*g;
+      vRef.value = b2*vRef.value + (1-b2)*g*g;
+      const mHat = mRef.value / (1 - Math.pow(b1, t));
+      const vHat = vRef.value / (1 - Math.pow(b2, t));
+      return param - lr * mHat / (Math.sqrt(vHat) + eps);
+    }
+
+    const updVec = (P, G, M, V)=>{
+      for(let i=0;i<P.length;i++){
+        M[i] = b1*M[i] + (1-b1)*G[i];
+        V[i] = b2*V[i] + (1-b2)*G[i]*G[i];
+        const mHat = M[i] / (1 - Math.pow(b1, t));
+        const vHat = V[i] / (1 - Math.pow(b2, t));
+        P[i] = P[i] - lr * mHat / (Math.sqrt(vHat) + eps);
+      }
+    };
+    const updMat = (P, G, M, V)=>{
+      for(let i=0;i<P.length;i++){
+        for(let j=0;j<P[i].length;j++){
+          M[i][j] = b1*M[i][j] + (1-b1)*G[i][j];
+          V[i][j] = b2*V[i][j] + (1-b2)*G[i][j]*G[i][j];
+          const mHat = M[i][j] / (1 - Math.pow(b1, t));
+          const vHat = V[i][j] / (1 - Math.pow(b2, t));
+          P[i][j] = P[i][j] - lr * mHat / (Math.sqrt(vHat) + eps);
+        }
+      }
+    };
+
+    updMat(net.W1, grads.W1, this.m.W1, this.v.W1);
+    updVec(net.b1, grads.b1, this.m.b1, this.v.b1);
+    updMat(net.W2, grads.W2, this.m.W2, this.v.W2);
+    updVec(net.b2, grads.b2, this.m.b2, this.v.b2);
+    updMat(net.Wa, grads.Wa, this.m.Wa, this.v.Wa);
+    updVec(net.ba, grads.ba, this.m.ba, this.v.ba);
+    updMat(net.Wv, grads.Wv, this.m.Wv, this.v.Wv);
+    updVec(net.bv, grads.bv, this.m.bv, this.v.bv);
+  }
+}
+
+class PPOBuffer {
+  constructor(nEnvs, rolloutSteps){
+    this.nEnvs = nEnvs;
+    this.rolloutSteps = rolloutSteps;
+    this.size = nEnvs * rolloutSteps;
+    this.reset();
+  }
+  reset(){
+    this.ptr = 0;
+    this.obs = [];
+    this.actions = [];
+    this.rewards = [];
+    this.dones = [];
+    this.values = [];
+    this.logps = [];
+  }
+  store(obs, action, reward, done, value, logp){
+    if(this.ptr >= this.size) return;
+    this.obs.push(obs.slice());
+    this.actions.push(action|0);
+    this.rewards.push(+reward);
+    this.dones.push(done ? 1 : 0);
+    this.values.push(+value);
+    this.logps.push(+logp);
+    this.ptr += 1;
+  }
+  isFull(){ return this.ptr >= this.size; }
+}
+
+function zerosLikeNet(net){
+  const zerosMat = (r,c)=>Array.from({length:r}, ()=>Array.from({length:c}, ()=>0));
+  const zerosVec = (n)=>new Array(n).fill(0);
+  return {
+    W1: zerosMat(net.hidden1, net.inputSize), b1: zerosVec(net.hidden1),
+    W2: zerosMat(net.hidden2, net.hidden1), b2: zerosVec(net.hidden2),
+    Wa: zerosMat(2, net.hidden2), ba: zerosVec(2),
+    Wv: zerosMat(1, net.hidden2), bv: zerosVec(1),
+  };
+}
+function addOuter(Mat, a, b, scale){
+  for(let i=0;i<a.length;i++){
+    for(let j=0;j<b.length;j++){
+      Mat[i][j] += scale * a[i] * b[j];
+    }
+  }
+}
+function addVec(v, a, scale){
+  for(let i=0;i<v.length;i++) v[i] += scale * a[i];
+}
+function globalNorm(grads){
+  let s = 0;
+  const addMat = (M)=>{ for(const row of M) for(const x of row) s += x*x; };
+  const addVec = (V)=>{ for(const x of V) s += x*x; };
+  addMat(grads.W1); addVec(grads.b1);
+  addMat(grads.W2); addVec(grads.b2);
+  addMat(grads.Wa); addVec(grads.ba);
+  addMat(grads.Wv); addVec(grads.bv);
+  return Math.sqrt(s + 1e-12);
+}
+function scaleGrads(grads, scale){
+  const mulMat = (M)=>{ for(let i=0;i<M.length;i++) for(let j=0;j<M[i].length;j++) M[i][j] *= scale; };
+  const mulVec = (V)=>{ for(let i=0;i<V.length;i++) V[i] *= scale; };
+  mulMat(grads.W1); mulVec(grads.b1);
+  mulMat(grads.W2); mulVec(grads.b2);
+  mulMat(grads.Wa); mulVec(grads.ba);
+  mulMat(grads.Wv); mulVec(grads.bv);
+}
+
+function computeGAE(buffer, net, lastValues, gamma, lam){
+  const N = buffer.nEnvs;
+  const T = buffer.rolloutSteps;
+  const total = N*T;
+
+  const adv = new Array(total).fill(0);
+  const ret = new Array(total).fill(0);
+
+  for(let envId=0; envId<N; envId++){
+    let lastAdv = 0;
+    for(let t=T-1; t>=0; t--){
+      const idx = t*N + envId;
+      const done = buffer.dones[idx] === 1;
+      const nextNonTerminal = done ? 0 : 1;
+      const nextValue = (t === T-1) ? lastValues[envId] : buffer.values[(t+1)*N + envId];
+      const delta = buffer.rewards[idx] + gamma * nextValue * nextNonTerminal - buffer.values[idx];
+      const a = delta + gamma * lam * nextNonTerminal * lastAdv;
+      adv[idx] = a;
+      lastAdv = a;
+    }
+  }
+  for(let i=0;i<total;i++){
+    ret[i] = adv[i] + buffer.values[i];
+  }
+
+  
+  const mean = adv.reduce((a,b)=>a+b,0)/adv.length;
+  let v = 0;
+  for(const x of adv) v += (x-mean)*(x-mean);
+  v /= adv.length;
+  const std = Math.sqrt(v + 1e-8);
+  for(let i=0;i<adv.length;i++) adv[i] = (adv[i]-mean)/std;
+
+  return { adv, ret };
+}
+
+function ppoMinibatchGrad(net, buffer, idxs, adv, ret, clipEps, vfCoef, entCoef){
+  
+  const grads = zerosLikeNet(net);
+
+  let policyLossSum = 0;
+  let valueLossSum = 0;
+  let entropySum = 0;
+
+  for(const idx of idxs){
+    const obs = buffer.obs[idx];
+    const action = buffer.actions[idx];
+    const oldLogp = buffer.logps[idx];
+    const A = adv[idx];
+    const R = ret[idx];
+
+    const cache = net.forwardCache(obs);
+
+    const logits = cache.logits;
+    const probs = cache.probs;
+    const value = cache.value;
+
+    
+    const logp = logits[action] - cache.logSumExp;
+
+    const ratio = Math.exp(logp - oldLogp);
+
+    
+    const clippedRatio = clamp(ratio, 1-clipEps, 1+clipEps);
+    const surr1 = ratio * A;
+    const surr2 = clippedRatio * A;
+
+    
+    
+    
+    
+    let useClipped = false;
+    if(A >= 0){
+      useClipped = (surr2 < surr1);
+    } else {
+      useClipped = (surr2 > surr1);
+    }
+
+    let dLogp = 0; 
+    
+    if(useClipped){
+      
+      if(ratio < 1-clipEps || ratio > 1+clipEps){
+        dLogp = 0;
+      } else {
+        dLogp = -(A * ratio);
+      }
+    } else {
+      dLogp = -(A * ratio);
+    }
+
+    
+    const p0 = clamp(probs[0], 1e-8, 1-1e-8);
+    const p1 = clamp(probs[1], 1e-8, 1-1e-8);
+    const entropy = -(p0*Math.log(p0) + p1*Math.log(p1));
+    entropySum += entropy;
+
+    
+    const C = p0*(Math.log(p0)+1) + p1*(Math.log(p1)+1);
+    const dEnt_dLogits = [
+      p0*(C - (Math.log(p0)+1)),
+      p1*(C - (Math.log(p1)+1))
+    ];
+
+    
+    const dLogp_dLogits = [-probs[0], -probs[1]];
+    dLogp_dLogits[action] += 1;
+
+    
+    
+    
+    const dLogits = [
+      dLogp * dLogp_dLogits[0] - entCoef * dEnt_dLogits[0],
+      dLogp * dLogp_dLogits[1] - entCoef * dEnt_dLogits[1]
+    ];
+
+    
+    const vErr = (value - R);
+    const dValue = vfCoef * vErr; 
+
+    
+    
+    const obj = (A>=0) ? Math.min(surr1,surr2) : Math.max(surr1,surr2);
+    policyLossSum += -obj;
+    valueLossSum += 0.5 * vErr * vErr;
+
+    
+    
+    addOuter(grads.Wa, dLogits, cache.h2, 1);
+    addVec(grads.ba, dLogits, 1);
+
+    
+    for(let j=0;j<net.hidden2;j++){
+      grads.Wv[0][j] += dValue * cache.h2[j];
+    }
+    grads.bv[0] += dValue;
+
+    
+    const dh2 = new Array(net.hidden2).fill(0);
+    for(let j=0;j<net.hidden2;j++){
+      dh2[j] += net.Wa[0][j]*dLogits[0] + net.Wa[1][j]*dLogits[1];
+      dh2[j] += net.Wv[0][j]*dValue;
+    }
+    const dh2Pre = new Array(net.hidden2).fill(0);
+    for(let j=0;j<net.hidden2;j++){
+      const t = cache.h2[j];
+      dh2Pre[j] = dh2[j] * (1 - t*t); 
+    }
+
+    
+    addOuter(grads.W2, dh2Pre, cache.h1, 1);
+    addVec(grads.b2, dh2Pre, 1);
+
+    
+    const dh1 = new Array(net.hidden1).fill(0);
+    for(let i=0;i<net.hidden1;i++){
+      let s=0;
+      for(let j=0;j<net.hidden2;j++) s += net.W2[j][i] * dh2Pre[j];
+      dh1[i] = s;
+    }
+    const dh1Pre = new Array(net.hidden1).fill(0);
+    for(let i=0;i<net.hidden1;i++){
+      const t = cache.h1[i];
+      dh1Pre[i] = dh1[i] * (1 - t*t);
+    }
+
+    
+    addOuter(grads.W1, dh1Pre, cache.x, 1);
+    addVec(grads.b1, dh1Pre, 1);
+  }
+
+  
+  const inv = 1 / Math.max(1, idxs.length);
+  scaleGrads(grads, inv);
+  policyLossSum *= inv;
+  valueLossSum *= inv;
+  entropySum *= inv;
+
+  return { grads, policyLoss: policyLossSum, valueLoss: valueLossSum, entropy: entropySum };
+}
+
+function ppoUpdate(net, adam, buffer, gamma, lam, clipEps, vfCoef, entCoef, lr, epochs, minibatchSize, maxGradNorm){
+  
+  
+  
+  const N = buffer.size;
+  const idxAll = Array.from({length:N}, (_,i)=>i);
+
+  let lastPolicyLoss = 0, lastValueLoss = 0, lastEntropy = 0;
+
+  for(let ep=0; ep<epochs; ep++){
+    shuffleInPlace(idxAll);
+    for(let start=0; start<N; start += minibatchSize){
+      const idxs = idxAll.slice(start, Math.min(N, start+minibatchSize));
+      
+      const out = ppoMinibatchGrad(net, buffer, idxs, buffer._adv, buffer._ret, clipEps, vfCoef, entCoef);
+
+      
+      const gn = globalNorm(out.grads);
+      if(maxGradNorm > 0 && gn > maxGradNorm){
+        scaleGrads(out.grads, maxGradNorm / gn);
+      }
+
+      adam.step(net, out.grads, lr);
+
+      lastPolicyLoss = out.policyLoss;
+      lastValueLoss = out.valueLoss;
+      lastEntropy = out.entropy;
+    }
+  }
+
+  return { policyLoss: lastPolicyLoss, valueLoss: lastValueLoss, entropy: lastEntropy };
+}
+
+function roundRect(ctx, x, y, w, h, r, fill, stroke) {
+  if (w < 2*r) r = w/2;
+  if (h < 2*r) r = h/2;
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.arcTo(x+w, y,   x+w, y+h, r);
+  ctx.arcTo(x+w, y+h, x,   y+h, r);
+  ctx.arcTo(x,   y+h, x,   y,   r);
+  ctx.arcTo(x,   y,   x+w, y,   r);
+  ctx.closePath();
+  if (fill) ctx.fill();
+  if (stroke) ctx.stroke();
+}
+function drawCartPole(ctx, env, canvas, overlay){
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = "#070a12";
+  ctx.fillRect(0,0,W,H);
+
+  
+  ctx.strokeStyle = "rgba(148,163,184,0.15)";
+  ctx.lineWidth = 1;
+  for(let x=0;x<=W;x+=35){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+  for(let y=0;y<=H;y+=35){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+
+  const trackY = Math.floor(H*0.72);
+  ctx.strokeStyle = "rgba(226,232,240,0.25)";
+  ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(30, trackY); ctx.lineTo(W-30, trackY); ctx.stroke();
+
+  const [x, , theta, ] = env.state;
+  const worldXRange = env.xThreshold * 1.05;
+  const cartX = ((x / worldXRange) * 0.5 + 0.5) * (W-60) + 30;
+
+  const cartW = 64, cartH = 28;
+  const cartY = trackY - cartH;
+
+  ctx.fillStyle = "rgba(96,165,250,0.85)";
+  roundRect(ctx, cartX - cartW/2, cartY, cartW, cartH, 8, true, false);
+
+  ctx.fillStyle = "rgba(226,232,240,0.85)";
+  ctx.beginPath(); ctx.arc(cartX - cartW/3, trackY, 6, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cartX + cartW/3, trackY, 6, 0, Math.PI*2); ctx.fill();
+
+  const poleLen = 110;
+  const poleW = 8;
+  const pivotX = cartX;
+  const pivotY = cartY + 4;
+
+  const poleAngle = theta;
+  const tipX = pivotX + poleLen * Math.sin(poleAngle);
+  const tipY = pivotY - poleLen * Math.cos(poleAngle);
+
+  ctx.strokeStyle = "rgba(52,211,153,0.95)";
+  ctx.lineWidth = poleW;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(pivotX, pivotY);
+  ctx.lineTo(tipX, tipY);
+  ctx.stroke();
+
+  ctx.fillStyle = "rgba(251,191,36,0.95)";
+  ctx.beginPath(); ctx.arc(pivotX, pivotY, 7, 0, Math.PI*2); ctx.fill();
+
+  const leftB = ((-env.xThreshold / worldXRange) * 0.5 + 0.5) * (W-60) + 30;
+  const rightB = ((env.xThreshold / worldXRange) * 0.5 + 0.5) * (W-60) + 30;
+  ctx.strokeStyle = "rgba(251,113,133,0.3)";
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(leftB, trackY+8); ctx.lineTo(leftB, trackY-70); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(rightB, trackY+8); ctx.lineTo(rightB, trackY-70); ctx.stroke();
+
+  ctx.fillStyle = "rgba(226,232,240,0.85)";
+  ctx.font = "12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace";
+  const deg = (theta * 180 / Math.PI).toFixed(2);
+
+  if(overlay && overlay.ttl > 0){
+    ctx.save();
+    const alpha = Math.min(0.9, overlay.ttl / 80);
+    ctx.strokeStyle = `rgba(251,191,36,${alpha.toFixed(2)})`;
+    ctx.fillStyle = `rgba(251,191,36,${alpha.toFixed(2)})`;
+    ctx.lineWidth = 3;
+    if(overlay.type === "cart"){
+      const len = 30 + Math.min(80, Math.abs(overlay.mag)*90);
+      const dir = overlay.sign;
+      const x1 = cartX;
+      const y1 = cartY + cartH*0.3;
+      const x2 = x1 + len * dir;
+      const y2 = y1;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x2, y2);
+      ctx.lineTo(x2 - 10*dir, y2 - 6);
+      ctx.lineTo(x2 - 10*dir, y2 + 6);
+      ctx.closePath();
+      ctx.fill();
+    } else if(overlay.type === "pole"){
+      const radius = 36;
+      const start = -Math.PI/2;
+      const end = start + overlay.sign * 1.2;
+      ctx.beginPath();
+      ctx.arc(pivotX, pivotY, radius, start, end, overlay.sign < 0);
+      ctx.stroke();
+      const hx = pivotX + radius * Math.cos(end);
+      const hy = pivotY + radius * Math.sin(end);
+      const headDir = overlay.sign > 0 ? 1 : -1;
+      ctx.beginPath();
+      ctx.moveTo(hx, hy);
+      ctx.lineTo(hx - 8*headDir, hy - 6);
+      ctx.lineTo(hx - 8*headDir, hy + 6);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+
+function createNetViz(svg, net, vizH=14){
+  while(svg.firstChild) svg.removeChild(svg.firstChild);
+
+  const rect = svg.getBoundingClientRect();
+  const W = rect.width > 0 ? Math.floor(rect.width) : 760;
+  const H = rect.height > 0 ? Math.floor(rect.height) : 340;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+
+  const padX = 80, padY = 52;
+  const inN = net.inputSize;
+  const h1N = Math.min(vizH, net.hidden1);
+  const h2N = Math.min(vizH, net.hidden2);
+  const outN = 3; 
+  const layerX = [padX, W*0.40, W*0.67, W-padX];
+
+  function layerYs(n){
+    const top = padY, bottom = H - padY;
+    if(n===1) return [(top+bottom)/2];
+    const step = (bottom - top)/(n-1);
+    return Array.from({length:n}, (_,i)=> top + i*step);
+  }
+  const inY = layerYs(inN), h1Y = layerYs(h1N), h2Y = layerYs(h2N), outY = layerYs(outN);
+
+  const nodes = {
+    input: Array.from({length:inN}, (_,i)=>({x:layerX[0], y:inY[i]})),
+    h1: Array.from({length:h1N}, (_,i)=>({x:layerX[1], y:h1Y[i]})),
+    h2: Array.from({length:h2N}, (_,i)=>({x:layerX[2], y:h2Y[i]})),
+    out: Array.from({length:outN}, (_,i)=>({x:layerX[3], y:outY[i]})),
+  };
+
+  const defs = document.createElementNS("http://www.w3.org/2000/svg","defs");
+  const filter = document.createElementNS("http://www.w3.org/2000/svg","filter");
+  filter.setAttribute("id","glow");
+  filter.innerHTML = `
+    <feGaussianBlur stdDeviation="2.5" result="coloredBlur"></feGaussianBlur>
+    <feMerge>
+      <feMergeNode in="coloredBlur"></feMergeNode>
+      <feMergeNode in="SourceGraphic"></feMergeNode>
+    </feMerge>`;
+  defs.appendChild(filter);
+  svg.appendChild(defs);
+
+  const gEdges = document.createElementNS("http://www.w3.org/2000/svg","g");
+  const gNodes = document.createElementNS("http://www.w3.org/2000/svg","g");
+  svg.appendChild(gEdges);
+  svg.appendChild(gNodes);
+
+  function mkLine(x1,y1,x2,y2){
+    const line = document.createElementNS("http://www.w3.org/2000/svg","line");
+    line.setAttribute("x1",x1); line.setAttribute("y1",y1);
+    line.setAttribute("x2",x2); line.setAttribute("y2",y2);
+    line.setAttribute("stroke-linecap","round");
+    gEdges.appendChild(line);
+    return line;
+  }
+  function mkNode(x,y,r){
+    const c = document.createElementNS("http://www.w3.org/2000/svg","circle");
+    c.setAttribute("cx",x); c.setAttribute("cy",y); c.setAttribute("r",r);
+    c.setAttribute("stroke","rgba(226,232,240,0.55)");
+    c.setAttribute("stroke-width","1");
+    c.setAttribute("filter","url(#glow)");
+    gNodes.appendChild(c);
+    return c;
+  }
+  const edgeEls = { W1: [], W2: [], Wa: [], Wv: [] };
+
+  for(let i=0;i<h1N;i++){
+    for(let j=0;j<inN;j++){
+      edgeEls.W1.push({i,j, el: mkLine(nodes.input[j].x, nodes.input[j].y, nodes.h1[i].x, nodes.h1[i].y)});
+    }
+  }
+  for(let i=0;i<h2N;i++){
+    for(let j=0;j<h1N;j++){
+      edgeEls.W2.push({i,j, el: mkLine(nodes.h1[j].x, nodes.h1[j].y, nodes.h2[i].x, nodes.h2[i].y)});
+    }
+  }
+  
+  for(let i=0;i<2;i++){
+    for(let j=0;j<h2N;j++){
+      edgeEls.Wa.push({i,j, el: mkLine(nodes.h2[j].x, nodes.h2[j].y, nodes.out[i].x, nodes.out[i].y)});
+    }
+  }
+  
+  for(let j=0;j<h2N;j++){
+    edgeEls.Wv.push({j, el: mkLine(nodes.h2[j].x, nodes.h2[j].y, nodes.out[2].x, nodes.out[2].y)});
+  }
+
+  const nodeEls = { input: [], h1: [], h2: [], out: [] };
+
+  nodes.input.forEach((n,idx)=>{
+    const c = mkNode(n.x,n.y,12);
+    nodeEls.input.push({c});
+  });
+  nodes.h1.forEach((n)=>{
+    const c = mkNode(n.x,n.y,10);
+    nodeEls.h1.push({c});
+  });
+  nodes.h2.forEach((n)=>{
+    const c = mkNode(n.x,n.y,10);
+    nodeEls.h2.push({c});
+  });
+  nodes.out.forEach((n,idx)=>{
+    const c = mkNode(n.x,n.y,12);
+    nodeEls.out.push({c});
+  });
+
+  return { edgeEls, nodeEls, vizH, h1N, h2N };
+}
+
+function updateNetViz(viz, net){
+  const { edgeEls, nodeEls, h1N, h2N } = viz;
+
+  let maxAbs = 1e-6;
+  
+  for(let i=0;i<h1N;i++) for(let j=0;j<net.inputSize;j++) maxAbs = Math.max(maxAbs, Math.abs(net.W1[i][j]));
+  for(let i=0;i<h2N;i++) for(let j=0;j<h1N;j++) maxAbs = Math.max(maxAbs, Math.abs(net.W2[i][j]));
+  for(let i=0;i<2;i++) for(let j=0;j<h2N;j++) maxAbs = Math.max(maxAbs, Math.abs(net.Wa[i][j]));
+  for(let j=0;j<h2N;j++) maxAbs = Math.max(maxAbs, Math.abs(net.Wv[0][j]));
+
+  function edgeStyle(line, w){
+    const a = Math.abs(w) / maxAbs;
+    const width = 0.6 + 4.0 * Math.pow(a, 0.9);
+    line.setAttribute("stroke-width", width.toFixed(2));
+
+    const eps = 0.06 * maxAbs;
+    let col;
+    if(Math.abs(w) < eps) col = "rgba(100,116,139,0.45)";
+    else if(w > 0) col = "rgba(96,165,250,0.70)";
+    else col = "rgba(251,113,133,0.70)";
+    line.setAttribute("stroke", col);
+  }
+
+  for(const e of edgeEls.W1) edgeStyle(e.el, net.W1[e.i][e.j]);
+  for(const e of edgeEls.W2) edgeStyle(e.el, net.W2[e.i][e.j]);
+  for(const e of edgeEls.Wa) edgeStyle(e.el, net.Wa[e.i][e.j]);
+  for(const e of edgeEls.Wv) edgeStyle(e.el, net.Wv[0][e.j]);
+
+  const last = net.last;
+
+  function nodeFillFromValue(v){
+    const t = clamp((v+1)/2, 0, 1);
+    const alpha = 0.18 + 0.75*t;
+    if(Math.abs(v) < 0.08) return `rgba(148,163,184,${alpha.toFixed(3)})`;
+    if(v > 0) return `rgba(52,211,153,${alpha.toFixed(3)})`;
+    return `rgba(251,113,133,${alpha.toFixed(3)})`;
+  }
+
+  for(let i=0;i<nodeEls.input.length;i++){
+    const v = last.obsNorm[i] ?? 0;
+    nodeEls.input[i].c.setAttribute("fill", nodeFillFromValue(clamp(v/2.0, -1, 1)));
+  }
+  for(let i=0;i<nodeEls.h1.length;i++){
+    const v = last.h1[i] ?? 0;
+    nodeEls.h1[i].c.setAttribute("fill", nodeFillFromValue(v));
+  }
+  for(let i=0;i<nodeEls.h2.length;i++){
+    const v = last.h2[i] ?? 0;
+    nodeEls.h2[i].c.setAttribute("fill", nodeFillFromValue(v));
+  }
+  
+  const logits = last.logits || [0,0];
+  const m = (logits[0]+logits[1])/2;
+  const o0 = clamp((logits[0]-m)/3.0, -1, 1);
+  const o1 = clamp((logits[1]-m)/3.0, -1, 1);
+  const vOut = clamp(last.value/6.0, -1, 1);
+
+  nodeEls.out[0].c.setAttribute("fill", nodeFillFromValue(o0));
+  nodeEls.out[1].c.setAttribute("fill", nodeFillFromValue(o1));
+  nodeEls.out[2].c.setAttribute("fill", nodeFillFromValue(vOut));
+
+}
+
+const simCanvas = document.getElementById("simCanvas");
+const simCtx = simCanvas.getContext("2d");
+const netSvg = document.getElementById("netSvg");
+
+const config = {
+  speed: 6,
+  nEnvs: 8,
+  rolloutSteps: 128,
+  minibatch: 256,
+  epochs: 4,
+  lr: 0.0003,
+  gamma: 0.99,
+  lam: 0.95,
+  clip: 0.2,
+  ent: 0.01,
+  vf: 0.5,
+  gclip: 0.5
+};
+
+let isRunning = false;
+let isTraining = false;
+let modelReady = false;
+let randomForcesOn = true;
+let randomForceCountdown = 0;
+let isInfinity = true;
+
+const net = new ActorCriticNet(4, 64, 64);
+net.loadHeuristicPretrained();
+const adam = new Adam(net);
+
+let viz = null;
+
+let envs = [];
+let obs = []; 
+let buffer = null;
+
+let updateCount = 0;
+
+let epSteps0 = 0;
+let epReward0 = 0;
+let lastSurvival = 0;
+let bestSurvival = 0;
+const PRETRAINED_URL = "https://gist.githubusercontent.com/cofob/80604a8439370266d22a37248bde4c4e/raw/trained_cartpole_v4.json";
+
+async function loadDefaultModel(){
+  try{
+    const res = await fetch(PRETRAINED_URL);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const obj = await res.json();
+    net.setParams(obj);
+    adam.reset(net);
+  } catch(err){
+    net.loadHeuristicPretrained();
+    adam.reset(net);
+    console.warn("Pretrained load failed", err);
+  } finally {
+    rebuildEnvs();
+    isRunning = true;
+    isTraining = false;
+    modelReady = true;
+    scheduleRandomForce();
+  }
+}
+
+function rebuildEnvs(){
+  const n = Math.max(1, (config.nEnvs));
+  envs = Array.from({length:n}, ()=>new CartPole());
+  obs = envs.map(e=>e.reset());
+  buffer = new PPOBuffer(n, Math.max(16, config.rolloutSteps));
+  epSteps0 = 0; epReward0 = 0;
+  net.forward(obs[0]);
+  if(viz){
+    updateNetViz(viz, net);
+  }
+  scheduleRandomForce();
+}
+rebuildEnvs();
+loadDefaultModel();
+
+function resizeAll(){
+  const simRect = simCanvas.getBoundingClientRect();
+  if(simRect.width > 0 && simRect.height > 0){
+    simCanvas.width = Math.floor(simRect.width);
+    simCanvas.height = Math.floor(simRect.height);
+  }
+  viz = createNetViz(netSvg, net, 14);
+  updateNetViz(viz, net);
+}
+window.addEventListener("resize", resizeAll);
+resizeAll();
+
+function resetVisualEpisode(){
+  obs[0] = envs[0].reset();
+  epSteps0 = 0;
+  epReward0 = 0;
+  net.forward(obs[0]);
+}
+
+function scheduleRandomForce(){
+  randomForceCountdown = Math.round((7 + Math.random() * 5) * 60);
+}
+
+function stepEnv(envId){
+  const fw = net.forward(obs[envId]);
+  const probs = fw.probs;
+  const action = isTraining ? net.sampleAction(probs) : net.greedyAction(probs);
+  const out = envs[envId].step(action);
+  const doneFlag = (envId === 0 && isInfinity) ? false : out.done;
+
+  
+  const lse = logSumExp2(fw.logits[0], fw.logits[1]);
+  const logp = fw.logits[action] - lse;
+
+  if(isTraining){
+    buffer.store(obs[envId], action, out.reward, doneFlag, fw.value, logp);
+  }
+
+  obs[envId] = out.obs;
+
+  if(envId === 0){
+    epSteps0 += 1;
+    epReward0 += out.reward;
+    if(randomForcesOn){
+      randomForceCountdown -= 1;
+      if(randomForceCountdown <= 0){
+        const env = envs[0];
+        const cartKick = Math.random() < 0.5;
+        const sign = Math.random() < 0.5 ? -1 : 1;
+        if(cartKick){
+          const mag = (Math.random()*0.8 + 0.2) * sign;
+          env.state[1] += mag;
+        } else {
+          const mag = (Math.random()*0.9 + 0.3) * sign;
+          env.state[3] += mag;
+        }
+        scheduleRandomForce();
+      }
+    }
+  }
+
+  if(doneFlag){
+    if(envId === 0){
+      lastSurvival = epSteps0;
+      bestSurvival = Math.max(bestSurvival, lastSurvival);
+      
+      obs[envId] = envs[envId].reset();
+      epSteps0 = 0;
+      epReward0 = 0;
+    }
+    
+    if(envId !== 0){
+      obs[envId] = envs[envId].reset();
+    }
+  }
+}
+
+function maybeTrainPPO(){
+  if(!isTraining) return;
+  if(!buffer || !buffer.isFull()) return;
+
+  const gamma = clamp(config.gamma, 0, 0.999);
+  const lam   = clamp(config.lam, 0, 1);
+  const clipEps = clamp(config.clip, 0.001, 0.5);
+  const entCoef = Math.max(0, config.ent);
+  const vfCoef  = Math.max(0, config.vf);
+  const lr      = Math.max(0, config.lr);
+  const epochs  = Math.max(1, config.epochs);
+  const minibatch = Math.max(16, config.minibatch);
+  const maxGradNorm = Math.max(0, config.gclip);
+
+  
+  const lastValues = obs.map(o => net.forward(o).value);
+
+  const gae = computeGAE(buffer, net, lastValues, gamma, lam);
+  buffer._adv = gae.adv;
+  buffer._ret = gae.ret;
+
+  const out = ppoUpdate(net, adam, buffer, gamma, lam, clipEps, vfCoef, entCoef, lr, epochs, minibatch, maxGradNorm);
+
+  updateCount += 1;
+
+  buffer.reset();
+}
+
+function tick(){
+  
+  drawCartPole(simCtx, envs[0], simCanvas, null);
+
+  if(!modelReady){
+    updateNetViz(viz, net);
+    requestAnimationFrame(tick);
+    return;
+  }
+
+  if(isRunning){
+    const stepsPerFrame = config.speed;
+
+    for(let s=0; s<stepsPerFrame; s++){
+      if(isTraining){
+        for(let envId=0; envId<envs.length; envId++){
+          stepEnv(envId);
+        }
+        if(buffer.isFull()){
+          maybeTrainPPO();
+          break; 
+        }
+      } else {
+        
+        stepEnv(0);
+      }
+    }
+  } else {
+    
+    net.forward(obs[0]);
+  }
+
+  updateNetViz(viz, net);
+
+  requestAnimationFrame(tick);
+}
+
+requestAnimationFrame(tick);
+  </script>
+</body>
+</html>
