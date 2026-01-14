@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CYBER MADNESS</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+        }
+
+        .cyber-grid {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            background:
+                linear-gradient(0deg, transparent 24%, rgba(255, 0, 255, .05) 25%, rgba(255, 0, 255, .05) 26%, transparent 27%, transparent 74%, rgba(255, 0, 255, .05) 75%, rgba(255, 0, 255, .05) 76%, transparent 77%, transparent),
+                linear-gradient(90deg, transparent 24%, rgba(0, 255, 255, .05) 25%, rgba(0, 255, 255, .05) 26%, transparent 27%, transparent 74%, rgba(0, 255, 255, .05) 75%, rgba(0, 255, 255, .05) 76%, transparent 77%, transparent);
+            background-size: 50px 50px;
+            animation: gridMove 20s linear infinite;
+            perspective: 1000px;
+            transform-style: preserve-3d;
+        }
+
+        @keyframes gridMove {
+            0% {
+                transform: rotateX(60deg) translateZ(0);
+            }
+
+            100% {
+                transform: rotateX(60deg) translateZ(500px);
+            }
+        }
+
+        .hack-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: clamp(2rem, 10vw, 6rem);
+            color: #0f0;
+            text-shadow:
+                0 0 10px #0f0,
+                0 0 20px #0f0,
+                0 0 40px #0f0,
+                0 0 80px #0f0;
+            animation: hackGlitch 0.5s infinite;
+            z-index: 100;
+            white-space: nowrap;
+        }
+
+        @keyframes hackGlitch {
+
+            0%,
+            100% {
+                transform: translate(-50%, -50%);
+                text-shadow:
+                    0 0 10px #0f0,
+                    0 0 20px #0f0,
+                    0 0 40px #0f0;
+            }
+
+            25% {
+                transform: translate(-48%, -52%);
+                text-shadow:
+                    -2px 0 #f0f,
+                    2px 2px #0ff;
+            }
+
+            50% {
+                transform: translate(-52%, -48%);
+                text-shadow:
+                    2px 0 #0ff,
+                    -2px -2px #f0f;
+            }
+
+            75% {
+                transform: translate(-49%, -51%);
+                text-shadow:
+                    0 0 10px #ff0,
+                    0 0 20px #f0f;
+            }
+        }
+
+        .data-stream {
+            position: fixed;
+            color: #0f0;
+            font-size: 12px;
+            white-space: nowrap;
+            animation: streamFlow 10s linear infinite;
+            opacity: 0.7;
+        }
+
+        @keyframes streamFlow {
+            0% {
+                transform: translateX(100vw);
+            }
+
+            100% {
+                transform: translateX(-100%);
+            }
+        }
+
+        .neon-box {
+            position: fixed;
+            border: 3px solid;
+            animation: neonCycle 3s linear infinite, boxFloat 6s ease-in-out infinite;
+            pointer-events: none;
+        }
+
+        @keyframes neonCycle {
+
+            0%,
+            100% {
+                border-color: #ff00ff;
+                box-shadow: 0 0 20px #ff00ff, inset 0 0 20px #ff00ff;
+            }
+
+            33% {
+                border-color: #00ffff;
+                box-shadow: 0 0 20px #00ffff, inset 0 0 20px #00ffff;
+            }
+
+            66% {
+                border-color: #ffff00;
+                box-shadow: 0 0 20px #ffff00, inset 0 0 20px #ffff00;
+            }
+        }
+
+        @keyframes boxFloat {
+
+            0%,
+            100% {
+                transform: translate(0, 0) rotate(0deg);
+            }
+
+            50% {
+                transform: translate(20px, -20px) rotate(5deg);
+            }
+        }
+
+        .pixel-explosion {
+            position: fixed;
+            width: 10px;
+            height: 10px;
+            background: #fff;
+            animation: pixelBurst 1s ease-out forwards;
+        }
+
+        @keyframes pixelBurst {
+            0% {
+                transform: scale(1) translate(0, 0);
+                opacity: 1;
+            }
+
+            100% {
+                transform: scale(0) translate(var(--tx), var(--ty));
+                opacity: 0;
+            }
+        }
+
+        .terminal-cursor {
+            position: fixed;
+            width: 20px;
+            height: 30px;
+            background: #0f0;
+            animation: cursorBlink 0.8s infinite;
+            mix-blend-mode: screen;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        @keyframes cursorBlink {
+
+            0%,
+            49% {
+                opacity: 1;
+            }
+
+            50%,
+            100% {
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="cyber-grid"></div>
+    <div class="hack-text" id="hackText">HACKING...</div>
+    <div class="terminal-cursor" id="cursor"></div>
+
+    <script>
+        // Random hack text
+        const hackTexts = [
+            'HACKING...',
+            'ACCESS GRANTED',
+            'UPLOADING VIRUS...',
+            '>>> ROOT ACCESS',
+            'DECRYPTING...',
+            'BREACH DETECTED',
+            'SYSTEM OVERRIDE',
+            'CYBER SPACE',
+            'NEURAL LINK'
+        ];
+
+        const hackTextEl = document.getElementById('hackText');
+        let textIndex = 0;
+
+        setInterval(() => {
+            textIndex = (textIndex + 1) % hackTexts.length;
+            hackTextEl.textContent = hackTexts[textIndex];
+        }, 2000);
+
+        // Data streams
+        function createDataStream() {
+            const stream = document.createElement('div');
+            stream.className = 'data-stream';
+            stream.style.top = Math.random() * 100 + '%';
+            stream.textContent = Array(100).fill(0).map(() =>
+                Math.random() > 0.5 ? '1' : '0'
+            ).join('');
+            stream.style.animationDuration = (5 + Math.random() * 5) + 's';
+            document.body.appendChild(stream);
+
+            setTimeout(() => stream.remove(), 10000);
+        }
+
+        setInterval(createDataStream, 1000);
+
+        // Neon boxes
+        function createNeonBox() {
+            const box = document.createElement('div');
+            box.className = 'neon-box';
+            box.style.left = Math.random() * 80 + '%';
+            box.style.top = Math.random() * 80 + '%';
+            box.style.width = (50 + Math.random() * 150) + 'px';
+            box.style.height = (50 + Math.random() * 150) + 'px';
+            box.style.animationDelay = Math.random() * 3 + 's';
+            document.body.appendChild(box);
+
+            setTimeout(() => box.remove(), 12000);
+        }
+
+        for (let i = 0; i < 5; i++) {
+            setTimeout(createNeonBox, i * 500);
+        }
+        setInterval(createNeonBox, 4000);
+
+        // Click pixel explosions
+        document.addEventListener('click', (e) => {
+            const colors = ['#ff00ff', '#00ffff', '#ffff00', '#ff0000', '#0000ff'];
+
+            for (let i = 0; i < 20; i++) {
+                setTimeout(() => {
+                    const pixel = document.createElement('div');
+                    pixel.className = 'pixel-explosion';
+                    pixel.style.left = e.clientX + 'px';
+                    pixel.style.top = e.clientY + 'px';
+                    pixel.style.background = colors[Math.floor(Math.random() * colors.length)];
+
+                    const angle = (Math.PI * 2 * i) / 20;
+                    const distance = 100 + Math.random() * 100;
+                    pixel.style.setProperty('--tx', Math.cos(angle) * distance + 'px');
+                    pixel.style.setProperty('--ty', Math.sin(angle) * distance + 'px');
+
+                    document.body.appendChild(pixel);
+                    setTimeout(() => pixel.remove(), 1000);
+                }, i * 20);
+            }
+        });
+
+        // Custom cursor
+        const cursor = document.getElementById('cursor');
+        document.addEventListener('mousemove', (e) => {
+            cursor.style.left = e.clientX + 'px';
+            cursor.style.top = e.clientY + 'px';
+        });
+    </script>
+</body>
+
+</html>

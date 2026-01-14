@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YOUR ART HERE</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #000;
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            position: relative;
+        }
+
+        .matrix-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            opacity: 0.15;
+        }
+
+        .glitch-container {
+            position: relative;
+            z-index: 10;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+
+        .title {
+            font-size: clamp(3rem, 15vw, 10rem);
+            font-weight: bold;
+            text-align: center;
+            position: relative;
+            animation: colorShift 3s infinite, glitchTitle 5s infinite;
+            text-shadow:
+                0 0 10px #ff00ff,
+                0 0 20px #ff00ff,
+                0 0 30px #ff00ff,
+                3px 3px 0 #00ffff,
+                -3px -3px 0 #ffff00;
+            letter-spacing: 0.1em;
+        }
+
+        .subtitle {
+            font-size: clamp(1.2rem, 4vw, 2.5rem);
+            margin-top: 2rem;
+            color: #00ff00;
+            text-shadow: 0 0 10px #00ff00, 0 0 20px #00ff00;
+            animation: blink 1.5s infinite, slideIn 2s ease-out;
+            letter-spacing: 0.2em;
+        }
+
+        .subtitle strong {
+            color: #ff00ff;
+            text-shadow: 0 0 10px #ff00ff, 0 0 20px #ff00ff;
+        }
+
+        .explosion {
+            position: fixed;
+            border-radius: 50%;
+            pointer-events: none;
+            animation: explode 2s ease-out forwards;
+        }
+
+        @keyframes explode {
+            0% {
+                transform: scale(0) rotate(0deg);
+                opacity: 1;
+            }
+
+            100% {
+                transform: scale(20) rotate(720deg);
+                opacity: 0;
+            }
+        }
+
+        @keyframes colorShift {
+
+            0%,
+            100% {
+                color: #ff0000;
+            }
+
+            16% {
+                color: #ff8800;
+            }
+
+            33% {
+                color: #ffff00;
+            }
+
+            50% {
+                color: #00ff00;
+            }
+
+            66% {
+                color: #00ffff;
+            }
+
+            83% {
+                color: #ff00ff;
+            }
+        }
+
+        @keyframes glitchTitle {
+
+            0%,
+            90%,
+            100% {
+                transform: translate(0, 0) skew(0deg);
+            }
+
+            91% {
+                transform: translate(-5px, 2px) skew(-2deg);
+            }
+
+            92% {
+                transform: translate(5px, -2px) skew(2deg);
+            }
+
+            93% {
+                transform: translate(-2px, 1px) skew(-1deg);
+            }
+        }
+
+        @keyframes blink {
+
+            0%,
+            49%,
+            51%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.3;
+            }
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateY(50px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .particles {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: white;
+            border-radius: 50%;
+            animation: float 3s infinite;
+        }
+
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translateY(0) translateX(0);
+                opacity: 0;
+            }
+
+            50% {
+                opacity: 1;
+            }
+        }
+
+        .scanline {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(0deg,
+                    rgba(0, 255, 0, 0.03) 0px,
+                    rgba(0, 255, 0, 0.03) 1px,
+                    transparent 1px,
+                    transparent 2px);
+            z-index: 20;
+            pointer-events: none;
+            animation: scanlines 8s linear infinite;
+        }
+
+        @keyframes scanlines {
+            0% {
+                transform: translateY(0);
+            }
+
+            100% {
+                transform: translateY(50px);
+            }
+        }
+
+        .retro-border {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            bottom: 20px;
+            border: 3px solid;
+            border-image: linear-gradient(45deg, #ff00ff, #00ffff, #ffff00, #ff00ff) 1;
+            z-index: 15;
+            pointer-events: none;
+            animation: borderPulse 2s infinite;
+        }
+
+        @keyframes borderPulse {
+
+            0%,
+            100% {
+                opacity: 0.5;
+            }
+
+            50% {
+                opacity: 1;
+            }
+        }
+
+        .art-frame {
+            margin-top: 3rem;
+            padding: 2rem;
+            border: 2px solid #00ffff;
+            background: rgba(0, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            box-shadow:
+                0 0 20px rgba(0, 255, 255, 0.5),
+                inset 0 0 20px rgba(0, 255, 255, 0.1);
+            animation: frameGlow 2s infinite;
+            max-width: 800px;
+        }
+
+        @keyframes frameGlow {
+
+            0%,
+            100% {
+                box-shadow:
+                    0 0 20px rgba(0, 255, 255, 0.5),
+                    inset 0 0 20px rgba(0, 255, 255, 0.1);
+            }
+
+            50% {
+                box-shadow:
+                    0 0 40px rgba(255, 0, 255, 0.8),
+                    inset 0 0 40px rgba(255, 0, 255, 0.2);
+            }
+        }
+
+        .art-text {
+            color: #ffff00;
+            font-size: clamp(1rem, 2.5vw, 1.5rem);
+            text-align: center;
+            line-height: 1.8;
+            text-shadow: 0 0 5px #ffff00;
+        }
+
+        .floating-text {
+            position: absolute;
+            font-size: clamp(1.2rem, 3vw, 2rem);
+            font-weight: bold;
+            letter-spacing: 0.1em;
+            animation: floatAround 4s ease-in-out infinite, colorPulse 3s infinite;
+            white-space: nowrap;
+        }
+
+        @keyframes floatAround {
+
+            0%,
+            100% {
+                transform: translate(0, 0) rotate(0deg);
+            }
+
+            25% {
+                transform: translate(10px, -10px) rotate(2deg);
+            }
+
+            50% {
+                transform: translate(-5px, 5px) rotate(-1deg);
+            }
+
+            75% {
+                transform: translate(8px, 8px) rotate(1deg);
+            }
+        }
+
+        @keyframes colorPulse {
+
+            0%,
+            100% {
+                filter: brightness(1);
+            }
+
+            50% {
+                filter: brightness(1.5);
+            }
+        }
+
+        .qr-container {
+            margin-top: 2rem;
+            padding: 1.5rem;
+            background: rgba(255, 255, 255, 0.1);
+            border: 3px solid #ff00ff;
+            border-radius: 10px;
+            display: inline-block;
+            box-shadow: 0 0 30px rgba(255, 0, 255, 0.6);
+            animation: qrGlow 2s infinite;
+        }
+
+        @keyframes qrGlow {
+
+            0%,
+            100% {
+                box-shadow: 0 0 30px rgba(255, 0, 255, 0.6);
+            }
+
+            50% {
+                box-shadow: 0 0 50px rgba(0, 255, 255, 0.8);
+                border-color: #00ffff;
+            }
+        }
+
+        .qr-container img {
+            display: block;
+            width: 200px;
+            height: 200px;
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        @keyframes rotate3d {
+            0% {
+                transform: rotateY(0deg) rotateX(0deg);
+            }
+
+            100% {
+                transform: rotateY(360deg) rotateX(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <canvas class="matrix-bg"></canvas>
+    <div class="scanline"></div>
+    <div class="retro-border"></div>
+    <div class="particles" id="particles"></div>
+
+    <div class="glitch-container">
+        <h1 class="title">YOUR ART HERE</h1>
+        <div class="subtitle">
+            github.com/F0RTHSP4CE/<strong>vesagrind</strong>
+        </div>
+
+        <div class="art-frame" style="position: relative; min-height: 400px;">
+            <div class="floating-text"
+                style="top: 10%; left: 5%; color: #ff00ff; text-shadow: 0 0 20px #ff00ff; animation-delay: 0s;">
+                SHOW UR ART
+            </div>
+            <div class="floating-text"
+                style="top: 25%; right: 10%; color: #00ffff; text-shadow: 0 0 20px #00ffff; animation-delay: 0.5s;">
+                BUDDY!
+            </div>
+            <div class="floating-text"
+                style="top: 45%; left: 15%; color: #ffff00; text-shadow: 0 0 20px #ffff00; animation-delay: 1s;">
+                AWESOME
+            </div>
+            <div class="floating-text"
+                style="top: 50%; right: 5%; color: #ff0000; text-shadow: 0 0 20px #ff0000; animation-delay: 1.5s;">
+                HTML CSS JS
+            </div>
+            <div class="floating-text"
+                style="top: 70%; left: 25%; color: #00ff00; text-shadow: 0 0 20px #00ff00; animation-delay: 2s;">
+                PAGES
+            </div>
+            <div class="floating-text"
+                style="top: 75%; right: 20%; color: #ff8800; text-shadow: 0 0 20px #ff8800; animation-delay: 2.5s;">
+                WOAH AHAHAHA
+            </div>
+        </div>
+
+        <div class="qr-container">
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://github.com/F0RTHSP4CE/vesagrind"
+                alt="QR Code">
+        </div>
+    </div>
+
+    <script>
+        // Matrix rain effect
+        const canvas = document.querySelector('.matrix-bg');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const chars = '01アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン';
+        const fontSize = 14;
+        const columns = canvas.width / fontSize;
+        const drops = Array(Math.floor(columns)).fill(1);
+
+        function drawMatrix() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#0F0';
+            ctx.font = fontSize + 'px monospace';
+
+            for (let i = 0; i < drops.length; i++) {
+                const text = chars[Math.floor(Math.random() * chars.length)];
+                ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+
+                if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+                    drops[i] = 0;
+                }
+                drops[i]++;
+            }
+        }
+
+        setInterval(drawMatrix, 50);
+
+        // Create particles
+        const particlesContainer = document.getElementById('particles');
+        for (let i = 0; i < 50; i++) {
+            const particle = document.createElement('div');
+            particle.className = 'particle';
+            particle.style.left = Math.random() * 100 + '%';
+            particle.style.top = Math.random() * 100 + '%';
+            particle.style.animationDelay = Math.random() * 3 + 's';
+            particle.style.animationDuration = (2 + Math.random() * 3) + 's';
+            particlesContainer.appendChild(particle);
+        }
+
+        // Random explosions
+        function createExplosion() {
+            const explosion = document.createElement('div');
+            explosion.className = 'explosion';
+            explosion.style.left = Math.random() * 100 + '%';
+            explosion.style.top = Math.random() * 100 + '%';
+            explosion.style.width = '20px';
+            explosion.style.height = '20px';
+
+            const colors = ['#ff00ff', '#00ffff', '#ffff00', '#ff0000', '#00ff00'];
+            explosion.style.background = colors[Math.floor(Math.random() * colors.length)];
+            explosion.style.boxShadow = `0 0 20px ${explosion.style.background}`;
+
+            document.body.appendChild(explosion);
+
+            setTimeout(() => explosion.remove(), 2000);
+        }
+
+        setInterval(createExplosion, 800);
+
+        // Click explosions
+        document.addEventListener('click', (e) => {
+            for (let i = 0; i < 5; i++) {
+                setTimeout(() => {
+                    const explosion = document.createElement('div');
+                    explosion.className = 'explosion';
+                    explosion.style.left = e.clientX + 'px';
+                    explosion.style.top = e.clientY + 'px';
+                    explosion.style.width = '30px';
+                    explosion.style.height = '30px';
+                    const colors = ['#ff00ff', '#00ffff', '#ffff00'];
+                    explosion.style.background = colors[Math.floor(Math.random() * colors.length)];
+                    document.body.appendChild(explosion);
+                    setTimeout(() => explosion.remove(), 2000);
+                }, i * 100);
+            }
+        });
+
+        // Resize handler
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+    </script>
+</body>
+
+</html>
