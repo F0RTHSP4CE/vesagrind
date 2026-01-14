@@ -270,6 +270,7 @@ const jackpotNumber = document.getElementById('jackpot-number');
 let gamblingInProgress = false;
 let jackpotValue = 4323487539;
 
+
 // Функция для бесконечного увеличения числа
 function updateJackpot() {
   jackpotValue += 45238; // увеличиваем на 45238 за кадр
@@ -322,11 +323,19 @@ bottomMessage.classList.add('crazy-message');
   });
 }
 
-document.addEventListener('keydown', (e) => {
+
+window.addEventListener('message', function(event) {
+			if (event.data.type === 'ENTER_PRESSED') {
+				startGambling()
+			}
+		});
+
+    document.addEventListener('keydown', (e) => {
   if (e.code === 'Enter') {
     startGambling();
   }
 });
+
 </script>
 <img src="melstroy.gif" id="melstroy-gif" alt="melstroy">
 <img src="1xbet.png" id="xbet-logo" alt="1XBET">
