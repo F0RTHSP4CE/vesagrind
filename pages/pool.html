@@ -19,6 +19,8 @@
             width: 100vw;
             height: 100vh;
             background: #0a0020;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
         }
 
         #info {
@@ -49,24 +51,22 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
 
-        // Canvas size (full screen)
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
+        // Canvas size (smaller internal resolution for performance)
+        canvas.width = 768;
+        canvas.height = 1024;
 
-        // Resize handler
+        // Resize handler (no need to resize internal canvas)
         window.addEventListener('resize', () => {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            updateTableBoundaries();
+            // Canvas stays at fixed resolution, CSS handles scaling
         });
 
         // Physics constants
-        const FRICTION = 0.985;
-        const BALL_RADIUS = 16;
-        const CUE_BALL_RADIUS = 16;
-        const POCKET_RADIUS = 20;
+        const FRICTION = 0.98;
+        const BALL_RADIUS = 32;
+        const CUE_BALL_RADIUS = 32;
+        const POCKET_RADIUS = 40;
         const MIN_VELOCITY = 0.05;
-        const MAX_POWER = 25;
+        const MAX_POWER = 35;
 
         // Table boundaries
         let TABLE = {
@@ -211,7 +211,7 @@
                 const startY = TABLE.y + 250;
 
                 let ballNum = 1;
-                for (let row = 0; row < 5; row++) {
+                for (let row = 0; row < 4; row++) {
                     for (let col = 0; col <= row; col++) {
                         const x = startX + (col - row / 2) * BALL_RADIUS * 2.2 + (Math.random() - 0.5) * 10;
                         const y = startY + row * BALL_RADIUS * 2.2 + (Math.random() - 0.5) * 10;
@@ -378,7 +378,7 @@
             updateAI() {
                 // Only act when all balls have stopped
                 const allStopped = this.balls.every(ball => !ball.isMoving());
-                if (!allStopped) {
+                if (!allStopped && this.aiState !== 'aiming' && this.aiState !== 'shooting') {
                     this.aiState = 'waiting';
                     this.explosionDelay = 0;
                     return;
@@ -391,7 +391,7 @@
 
                 if (this.aiState === 'waiting') {
                     this.shootDelay++;
-                    if (this.shootDelay > 30) { // Wait 0.5 second before explosion
+                    if (this.shootDelay > 15) { // Wait 0.25 second before explosion
                         this.aiState = 'exploding';
                         this.shootDelay = 0;
                     }
@@ -501,7 +501,7 @@
                         this.aimPower
                     );
 
-                    if (this.aimTime > 120) { // Aim for 2 seconds
+                    if (this.aimTime > 60) { // Aim for 1 second
                         this.aiState = 'shooting';
                     }
                 } else if (this.aiState === 'shooting') {
