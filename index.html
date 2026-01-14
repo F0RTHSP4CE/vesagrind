@@ -50,8 +50,8 @@
 <body>
     <div id="container">
         <div id="frame-wrapper">
-            <iframe class="frame-layer" id="frame-a" src="about:blank"></iframe>
-            <iframe class="frame-layer" id="frame-b" src="about:blank"></iframe>
+            <iframe class="frame-layer" id="frame-a" src="about:blank" tabindex="0"></iframe>
+            <iframe class="frame-layer" id="frame-b" src="about:blank" tabindex="0"></iframe>
         </div>
     </div>
 
@@ -97,6 +97,32 @@
         let activeFrameIndex = 0;
         let isTransitioning = false;
 
+        function focusFrame(frameEl) {
+            if (!frameEl) return;
+
+            // Ensure the iframe is focusable in all browsers
+            if (!frameEl.hasAttribute("tabindex")) {
+                frameEl.setAttribute("tabindex", "0");
+            }
+
+            try {
+                frameEl.focus({ preventScroll: true });
+            } catch {
+                frameEl.focus();
+            }
+
+            // Some browsers prefer focusing the inner window as well
+            try {
+                frameEl.contentWindow && frameEl.contentWindow.focus();
+            } catch {
+                // ignore cross-origin / focus restrictions
+            }
+        }
+
+        function focusActiveFrame() {
+            focusFrame(frames[activeFrameIndex]);
+        }
+
         function pickDirection() {
             return DIRECTIONS[Math.floor(Math.random() * DIRECTIONS.length)];
         }
@@ -112,8 +138,10 @@
                 other.style.transform = "translate(0, 0)";
                 other.style.zIndex = "1";
             }
+            frameEl.addEventListener("load", () => focusFrame(frameEl), { once: true });
             frameEl.src = url;
             activeFrameIndex = frames.indexOf(frameEl);
+            focusFrame(frameEl);
         }
 
         function startSlideTransition(incoming, outgoing, url) {
@@ -130,6 +158,7 @@
             outgoing.style.zIndex = "1";
 
             incoming.addEventListener("load", () => {
+                focusFrame(incoming);
                 requestAnimationFrame(() => {
                     incoming.style.transition = "transform 1s ease-in-out";
                     outgoing.style.transition = "transform 1s ease-in-out";
@@ -225,6 +254,10 @@
         });
 
         // Start the slideshow
+        // Give keyboard focus to the active iframe (alternative to postMessage-based key forwarding).
+        document.getElementById("frame-wrapper")?.addEventListener("pointerdown", focusActiveFrame, { passive: true });
+        window.addEventListener("focus", focusActiveFrame);
+
         showRandomPage();
         restartTimer();
     </script>
