@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Random Slideshow</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            overflow: hidden;
+            background: #000;
+            font-family: Arial, sans-serif;
+        }
+
+        .slideshow-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .slide {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 1s ease-in-out;
+        }
+
+        .slide.active {
+            opacity: 1;
+            z-index: 1;
+        }
+
+        .slide img {
+            width: 100vw;
+            height: 100vh;
+            object-fit: contain;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Animation classes */
+        .fade-in {
+            animation: fadeIn 1.5s ease-in-out;
+        }
+
+        .zoom-in {
+            animation: zoomIn 1.5s ease-in-out;
+        }
+
+        .slide-left {
+            animation: slideLeft 1.5s ease-in-out;
+        }
+
+        .slide-right {
+            animation: slideRight 1.5s ease-in-out;
+        }
+
+        .rotate-in {
+            animation: rotateIn 1.5s ease-in-out;
+        }
+
+        .bounce-in {
+            animation: bounceIn 1.5s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        @keyframes zoomIn {
+            from {
+                opacity: 0;
+                transform: scale(0.5);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        @keyframes slideLeft {
+            from {
+                opacity: 0;
+                transform: translateX(100%);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes slideRight {
+            from {
+                opacity: 0;
+                transform: translateX(-100%);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes rotateIn {
+            from {
+                opacity: 0;
+                transform: rotate(-180deg) scale(0.5);
+            }
+
+            to {
+                opacity: 1;
+                transform: rotate(0deg) scale(1);
+            }
+        }
+
+        @keyframes bounceIn {
+            0% {
+                opacity: 0;
+                transform: scale(0.3);
+            }
+
+            50% {
+                opacity: 1;
+                transform: scale(1.05);
+            }
+
+            70% {
+                transform: scale(0.9);
+            }
+
+            100% {
+                transform: scale(1);
+            }
+        }
+
+        .quote {
+            position: absolute;
+            z-index: 5;
+            font-weight: bold;
+            max-width: 80vw;
+            padding: 20px;
+            line-height: 1.4;
+            animation: fadeIn 2s ease-in-out;
+            font-family: 'Monospace', monospace;
+            background-color: #00000033;
+            text-shadow: #000 2px 2px 4px;
+        }
+
+        @media (max-width: 768px) {
+            .quote {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="slideshow-container" id="slideshow"></div>
+
+    <script>
+        // === CONFIGURATION ===
+        const MIN_DURATION = 10000; // Minimum time per slide (milliseconds)
+        const MAX_DURATION = 20000; // Maximum time per slide (milliseconds)
+
+        // All available images
+        const allImages = [
+            '1.jpg', '10.jpeg', '10.jpg', '11.jpg', '12.png',
+            '13.png', '14.webp', '15.jpg', '16.jpg', '17.jpg',
+            '18.jpg', '19.jpg', '2.gif', '3.webp', '4.webp',
+            '5.gif', '6.png', '7.gif', '8.jpg', '9.jpg',
+            '20.avif'
+        ];
+
+        // Quotes to display
+        const quotes = [
+            "Anything That's Fun Costs At Least Eight Dollars",
+            "Hippies. They're Everywhere. They Wanna Save The Earth, But All They Do Is Smoke Pot And Smell Bad.",
+            "Words Cannot Express How Much I Hate You Guys",
+            "How About We Sing Kyle's Mom's A Stupid Bitch In D Minor",
+            "Selling Out Is Sweet Because, When You Sell Out, You Get To Make A Lot Of Money.",
+            "I Know Enough To Exploit It.",
+            "My mom says there's a lot of black people in [Country].",
+            "'Oh, you're breaking my balls here', uttered during any negotiation",
+            "Drugs are bad, mmkay?",
+            "All animals kill, and the animals that don’t kill are stupid ones like cows and turtles and stuff.",
+            "As you get older, boobs will start becoming a major part of your life. But you can’t let them get in the way of your friends. There are a lot of boobs out there. But they’re just boobs. Your friends are forever.",
+            "Kenny’s family is so poor that yesterday, they had to put their cardboard box up for a second mortgage.",
+            "If you want to find some quality friends, you gotta wade through all the dicks first.",
+            "Dude, dolphins are intelligent and friendly.",
+        ];
+
+
+        // haha vladimir wrote it
+        const iqBySex = {
+            male: 100,
+            female: 0
+        }
+
+        // Colors for quotes
+        const colors = [
+            '#FF0080', '#00FFFF', '#FF1493', '#7FFF00', '#FF4500',
+            '#FFD700', '#9400D3', '#00FF00', '#FF00FF', '#FFFF00',
+            '#FF0000', '#00BFFF', '#FF69B4', '#ADFF2F', '#FF6347',
+            '#00FF7F', '#EE82EE', '#FFA500', '#FF1493', '#00CED1',
+            '#FF00AA', '#39FF14', '#FF073A', '#00FFAA', '#FF10F0'
+        ];
+
+        // Animation classes
+        const animations = [
+            'fade-in', 'zoom-in', 'slide-left',
+            'slide-right', 'rotate-in', 'bounce-in'
+        ];
+
+        let images = [];
+        let currentIndex = 0;
+        let autoPlayTimeout;
+
+        // Shuffle array function
+        function shuffleArray(array) {
+            const shuffled = [...array];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+            return shuffled;
+        }
+
+        // Get random animation
+        function getRandomAnimation() {
+            return animations[Math.floor(Math.random() * animations.length)];
+        }
+
+        // Get random duration between min and max
+        function getRandomDuration() {
+            return Math.floor(Math.random() * (MAX_DURATION - MIN_DURATION + 1)) + MIN_DURATION;
+        }
+
+        // Get random quote
+        function getRandomQuote() {
+            return quotes[Math.floor(Math.random() * quotes.length)];
+        }
+
+        // Get random color
+        function getRandomColor() {
+            return colors[Math.floor(Math.random() * colors.length)];
+        }
+
+        // Get random font size
+        function getRandomFontSize() {
+            const sizes = ['2rem', '3rem', '4rem', '5rem', '6rem'];
+            return sizes[Math.floor(Math.random() * sizes.length)];
+        }
+
+        // Get random position
+        function getRandomPosition() {
+            const positions = [
+                { top: '10%', left: '10%' },
+                { top: '10%', right: '10%' },
+                { bottom: '10%', left: '10%' },
+                { bottom: '10%', right: '10%' },
+                { top: '50%', left: '10%', transform: 'translateY(-50%)' },
+                { top: '50%', right: '10%', transform: 'translateY(-50%)' },
+                { top: '20%', left: '50%', transform: 'translateX(-50%)' },
+                { bottom: '20%', left: '50%', transform: 'translateX(-50%)' },
+                { top: '30%', left: '30%' },
+                { top: '30%', right: '30%' }
+            ];
+            return positions[Math.floor(Math.random() * positions.length)];
+        }
+
+        // Initialize slideshow
+        function initSlideshow() {
+            // Shuffle images on each page load
+            images = shuffleArray(allImages);
+
+            const container = document.getElementById('slideshow');
+            container.innerHTML = '';
+
+            // Create slide elements
+            images.forEach((image, index) => {
+                const slide = document.createElement('div');
+                slide.className = 'slide';
+                if (index === 0) slide.classList.add('active');
+
+                const img = document.createElement('img');
+                img.src = image;
+                img.alt = `Slide ${index + 1}`;
+
+                slide.appendChild(img);
+                container.appendChild(slide);
+            });
+
+            // Add quote to first slide
+            const firstSlide = document.querySelector('.slide.active');
+            if (firstSlide) {
+                const quoteElement = document.createElement('div');
+                quoteElement.className = 'quote';
+                quoteElement.textContent = getRandomQuote();
+                quoteElement.style.color = getRandomColor();
+                quoteElement.style.fontSize = getRandomFontSize();
+
+                const position = getRandomPosition();
+                Object.assign(quoteElement.style, position);
+
+                firstSlide.appendChild(quoteElement);
+            }
+
+            // Start autoplay
+            startAutoPlay();
+        }
+
+        function showSlide(index) {
+            const slides = document.querySelectorAll('.slide');
+            if (index >= slides.length) currentIndex = 0;
+            if (index < 0) currentIndex = slides.length - 1;
+
+            slides.forEach((slide, i) => {
+                slide.classList.remove('active');
+                const img = slide.querySelector('img');
+                // Remove all animation classes
+                animations.forEach(anim => img.classList.remove(anim));
+            });
+
+            const currentSlide = slides[currentIndex];
+            currentSlide.classList.add('active');
+
+            // Add random animation to the image
+            const img = currentSlide.querySelector('img');
+            img.classList.add(getRandomAnimation());
+
+            // Add quote to the slide
+            const existingQuote = currentSlide.querySelector('.quote');
+            if (existingQuote) existingQuote.remove();
+
+            const quoteElement = document.createElement('div');
+            quoteElement.className = 'quote';
+            quoteElement.textContent = getRandomQuote();
+            quoteElement.style.color = getRandomColor();
+            quoteElement.style.fontSize = getRandomFontSize();
+
+            const position = getRandomPosition();
+            Object.assign(quoteElement.style, position);
+
+            currentSlide.appendChild(quoteElement);
+        }
+
+        function nextSlide() {
+            currentIndex++;
+            if (currentIndex >= images.length) currentIndex = 0;
+            showSlide(currentIndex);
+            resetAutoPlay();
+        }
+
+        function previousSlide() {
+            currentIndex--;
+            if (currentIndex < 0) currentIndex = images.length - 1;
+            showSlide(currentIndex);
+            resetAutoPlay();
+        }
+
+        function startAutoPlay() {
+            const duration = getRandomDuration();
+            autoPlayTimeout = setTimeout(() => {
+                nextSlide();
+            }, duration);
+        }
+
+        function resetAutoPlay() {
+            clearTimeout(autoPlayTimeout);
+            startAutoPlay();
+        }
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight') nextSlide();
+            if (e.key === 'ArrowLeft') previousSlide();
+        });
+
+        // Initialize on page load
+        initSlideshow();
+    </script>
+</body>
+
+</html>
