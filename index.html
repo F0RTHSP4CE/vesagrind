@@ -74,8 +74,6 @@
         const INTERVAL_MS = 30_000; // 30 seconds
 
         const frames = Array.from(document.querySelectorAll(".frame-layer"));
-        const statusEl = document.getElementById("status");
-        const selectEl = document.getElementById("page-select");
 
         const DIRECTIONS = [
             { name: "left", incomingStart: "translateX(-100%)", outgoingEnd: "translateX(100%)" },
@@ -102,15 +100,6 @@
             return DIRECTIONS[Math.floor(Math.random() * DIRECTIONS.length)];
         }
 
-        function updateStatus() {
-            if (!PAGES.length) {
-                statusEl.textContent = "No pages configured. Edit PAGES in index.html.";
-                return;
-            }
-            const now = new Date();
-            statusEl.textContent = `Next change in ${INTERVAL_MS / 1000}s \u00b7 ${now.toLocaleTimeString()}`;
-        }
-
         function immediateShow(frameEl, url) {
             frameEl.style.transition = "none";
             frameEl.style.transform = "translate(0, 0)";
@@ -124,7 +113,6 @@
             }
             frameEl.src = url;
             activeFrameIndex = frames.indexOf(frameEl);
-            updateStatus();
         }
 
         function startSlideTransition(incoming, outgoing, url) {
@@ -132,7 +120,6 @@
             isTransitioning = true;
 
             const direction = pickDirection();
-            statusEl.textContent = `Sliding ${direction.name}...`;
 
             incoming.style.transition = "none";
             outgoing.style.transition = "none";
@@ -160,7 +147,6 @@
                 incoming.style.zIndex = "2";
                 activeFrameIndex = frames.indexOf(incoming);
                 isTransitioning = false;
-                updateStatus();
             };
 
             outgoing.addEventListener("transitionend", finish, { once: true });
@@ -171,7 +157,6 @@
 
         function showPageAtIndex(index) {
             if (!PAGES.length) {
-                statusEl.textContent = "No pages configured. Edit PAGES in index.html.";
                 frames.forEach((f) => f.src = "about:blank");
                 return;
             }
@@ -191,15 +176,10 @@
                 const outgoing = frames[activeFrameIndex];
                 startSlideTransition(incoming, outgoing, url);
             }
-
-            if (selectEl) {
-                selectEl.value = String(index);
-            }
         }
 
         function showRandomPage() {
             if (!PAGES.length) {
-                statusEl.textContent = "No pages configured. Edit PAGES in index.html.";
                 frames.forEach((f) => f.src = "about:blank");
                 return;
             }
@@ -218,25 +198,6 @@
         function nextPageNow() {
             showRandomPage();
             restartTimer();
-        }
-
-        function populateSelect() {
-            if (!selectEl) return;
-            selectEl.innerHTML = "";
-            PAGES.forEach((url, index) => {
-                const option = document.createElement("option");
-                option.value = String(index);
-                option.textContent = url;
-                selectEl.appendChild(option);
-            });
-        }
-
-        if (selectEl) {
-            selectEl.addEventListener("change", () => {
-                const index = parseInt(selectEl.value, 10);
-                showPageAtIndex(isNaN(index) ? 0 : index);
-                restartTimer();
-            });
         }
 
         // Keyboard shortcut: Space or Right Arrow -> next random page
@@ -263,7 +224,6 @@
         });
 
         // Start the slideshow
-        populateSelect();
         showRandomPage();
         restartTimer();
     </script>
