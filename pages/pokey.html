@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Random Pokey the Penguin Comic</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        background: #000;
+      }
+
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      img {
+        width: 95vw;
+        max-width: 95vw;
+        max-height: 90vh;
+        height: auto;
+        object-fit: contain;
+        image-rendering: pixelated;
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <img id="comic" alt="Pokey the Penguin comic" />
+
+    <script>
+      (function () {
+        const BASE = "https://www.yellow5.com/pokey/archive";
+        const MAX_INDEX = 860;
+        const FILE_PATTERNS = [
+          (i) => `pokey${i}.gif`,
+          (i) => `pokey${i}_1.gif`,
+          (i) => `pokey${i}_2.gif`,
+          (i) => `pokey${i}_3.gif`,
+          (i) => `pokey${i}_4.gif`,
+          (i) => `pokey${i}_5.gif`,
+          (i) => `pokey${i}_6.gif`,
+          (i) => `pokey${i}_7.gif`
+        ];
+        const MAX_ATTEMPTS = 50;
+
+        const img = document.getElementById("comic");
+        let attempts = 0;
+        let index = 0;
+        let patternIndex = 0;
+
+        function randomIndex() {
+          return Math.floor(Math.random() * MAX_INDEX) + 1;
+        }
+
+        function nextUrl() {
+          const file = FILE_PATTERNS[patternIndex](index);
+          patternIndex += 1;
+          if (patternIndex >= FILE_PATTERNS.length) {
+            patternIndex = 0;
+            index = randomIndex();
+          }
+          return `${BASE}/${file}`;
+        }
+
+        function loadRandom() {
+          attempts = 0;
+          index = randomIndex();
+          patternIndex = 0;
+          img.src = nextUrl();
+        }
+
+        img.addEventListener("error", () => {
+          attempts += 1;
+          if (attempts >= MAX_ATTEMPTS) {
+            loadRandom();
+            return;
+          }
+          img.src = nextUrl();
+        });
+
+        document.addEventListener("click", loadRandom);
+        loadRandom();
+      })();
+    </script>
+  </body>
+</html>
