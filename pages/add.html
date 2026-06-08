@@ -37,11 +37,11 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            padding: 2rem;
+            padding: 1rem;
         }
 
         .title {
-            font-size: clamp(3rem, 15vw, 10rem);
+            font-size: clamp(2rem, 10vw, 5rem);
             font-weight: bold;
             text-align: center;
             position: relative;
@@ -56,8 +56,8 @@
         }
 
         .subtitle {
-            font-size: clamp(1.2rem, 4vw, 2.5rem);
-            margin-top: 2rem;
+            font-size: clamp(0.9rem, 3vw, 1.8rem);
+            margin-top: 1rem;
             color: #00ff00;
             text-shadow: 0 0 10px #00ff00, 0 0 20px #00ff00;
             animation: blink 1.5s infinite, slideIn 2s ease-out;
@@ -247,8 +247,8 @@
         }
 
         .art-frame {
-            margin-top: 3rem;
-            padding: 2rem;
+            margin-top: 1.5rem;
+            padding: 1rem;
             border: 2px solid #00ffff;
             background: rgba(0, 255, 255, 0.05);
             backdrop-filter: blur(10px);
@@ -277,7 +277,7 @@
 
         .art-text {
             color: #ffff00;
-            font-size: clamp(1rem, 2.5vw, 1.5rem);
+            font-size: clamp(0.8rem, 2vw, 1.2rem);
             text-align: center;
             line-height: 1.8;
             text-shadow: 0 0 5px #ffff00;
@@ -285,7 +285,7 @@
 
         .floating-text {
             position: absolute;
-            font-size: clamp(1.2rem, 3vw, 2rem);
+            font-size: clamp(0.9rem, 2.5vw, 1.5rem);
             font-weight: bold;
             letter-spacing: 0.1em;
             animation: floatAround 4s ease-in-out infinite, colorPulse 3s infinite;
@@ -325,8 +325,8 @@
         }
 
         .qr-container {
-            margin-top: 2rem;
-            padding: 1.5rem;
+            margin-top: 1rem;
+            padding: 1rem;
             background: rgba(255, 255, 255, 0.1);
             border: 3px solid #ff00ff;
             border-radius: 10px;
@@ -350,8 +350,8 @@
 
         .qr-container img {
             display: block;
-            width: 200px;
-            height: 200px;
+            width: 150px;
+            height: 150px;
             background: white;
             padding: 10px;
             border-radius: 5px;
@@ -409,7 +409,7 @@
         </div>
 
         <div class="qr-container">
-            <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://github.com/F0RTHSP4CE/vesagrind"
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://github.com/F0RTHSP4CE/vesagrind"
                 alt="QR Code">
         </div>
     </div>

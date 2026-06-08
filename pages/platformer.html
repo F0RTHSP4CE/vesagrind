@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Platformer</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #0a0a0a;
+            font-family: 'Courier New', monospace;
+            color: #0f0;
+        }
+        #gameCanvas {
+            border: 2px solid #0f0;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+        }
+        .controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border: 1px solid #0f0;
+        }
+        button {
+            background: #000;
+            color: #0f0;
+            border: 1px solid #0f0;
+            padding: 8px 16px;
+            margin: 5px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+        }
+        button:hover {
+            background: #0f0;
+            color: #000;
+        }
+        .info {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <div class="info">Height: <span id="height">0</span>m</div>
+        <div class="info">Platforms: <span id="platforms">0</span></div>
+        <button onclick="game.reset()">Reset</button>
+        <button onclick="game.togglePause()">Pause/Resume</button>
+    </div>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+    <script>
+        class Ball {
+            constructor(x, y, radius) {
+                this.x = x;
+                this.y = y;
+                this.radius = radius;
+                this.vx = 0;
+                this.vy = 0;
+                this.gravity = 0.4;
+                this.jumpPower = -12;
+                this.moveSpeed = 5;
+                this.onGround = false;
+                this.maxHeight = y;
+            }
+
+            update(platforms) {
+                // Apply gravity
+                this.vy += this.gravity;
+                
+                // Apply velocity
+                this.x += this.vx;
+                this.y += this.vy;
+
+                // Friction
+                this.vx *= 0.85;
+
+                this.onGround = false;
+
+                // Collision with platforms
+                for (let platform of platforms) {
+                    if (this.checkPlatformCollision(platform)) {
+                        // Landing on top
+                        if (this.vy > 0 && this.y + this.radius > platform.y && 
+                            this.y + this.radius < platform.y + 20) {
+                            this.y = platform.y - this.radius;
+                            this.vy = 0;
+                            this.onGround = true;
+                        }
+                        // Hit from below
+                        else if (this.vy < 0 && this.y - this.radius < platform.y + platform.height) {
+                            this.y = platform.y + platform.height + this.radius;
+                            this.vy = 0;
+                        }
+                        // Side collision
+                        else if (Math.abs(this.vx) > 0) {
+                            if (this.x < platform.x) {
+                                this.x = platform.x - this.radius;
+                            } else {
+                                this.x = platform.x + platform.width + this.radius;
+                            }
+                            this.vx = 0;
+                        }
+                    }
+                }
+
+                // Track max height
+                if (this.y < this.maxHeight) {
+                    this.maxHeight = this.y;
+                }
+
+                // Boundary constraints
+                if (this.x - this.radius < 0) {
+                    this.x = this.radius;
+                    this.vx = 0;
+                }
+                if (this.x + this.radius > 800) {
+                    this.x = 800 - this.radius;
+                    this.vx = 0;
+                }
+
+                // Reset if fell too far
+                if (this.y > 700) {
+                    this.y = 500;
+                    this.x = 400;
+                    this.vx = 0;
+                    this.vy = 0;
+                }
+            }
+
+            checkPlatformCollision(platform) {
+                let closestX = Math.max(platform.x, Math.min(this.x, platform.x + platform.width));
+                let closestY = Math.max(platform.y, Math.min(this.y, platform.y + platform.height));
+                let distX = this.x - closestX;
+                let distY = this.y - closestY;
+                return (distX * distX + distY * distY) < (this.radius * this.radius);
+            }
+
+            jump() {
+                if (this.onGround) {
+                    this.vy = this.jumpPower;
+                    this.onGround = false;
+                }
+            }
+
+            moveLeft() {
+                this.vx = -this.moveSpeed;
+            }
+
+            moveRight() {
+                this.vx = this.moveSpeed;
+            }
+
+            draw(ctx) {
+                ctx.save();
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = '#00ff00';
+                ctx.fillStyle = '#0f0';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+
+                // Draw direction indicator
+                if (Math.abs(this.vx) > 0.1) {
+                    ctx.fillStyle = '#0f0';
+                    ctx.beginPath();
+                    let dir = this.vx > 0 ? 1 : -1;
+                    ctx.moveTo(this.x + dir * this.radius, this.y);
+                    ctx.lineTo(this.x + dir * (this.radius + 8), this.y - 5);
+                    ctx.lineTo(this.x + dir * (this.radius + 8), this.y + 5);
+                    ctx.fill();
+                }
+            }
+        }
+
+        class Platform {
+            constructor(x, y, width, height) {
+                this.x = x;
+                this.y = y;
+                this.width = width;
+                this.height = height;
+            }
+
+            draw(ctx) {
+                ctx.fillStyle = '#0a0';
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+                ctx.strokeStyle = '#0f0';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(this.x, this.y, this.width, this.height);
+            }
+        }
+
+        class AI {
+            constructor(ball, platforms) {
+                this.ball = ball;
+                this.platforms = platforms;
+                this.targetPlatform = null;
+                this.lastDecisionTime = Date.now();
+                this.decisionInterval = 2000; // 2 seconds
+                this.currentPlatform = null;
+                this.intermediateTarget = null;
+            }
+
+            update() {
+                // Only make new decisions every 2 seconds when on ground
+                let currentTime = Date.now();
+                if (currentTime - this.lastDecisionTime > this.decisionInterval && this.ball.onGround) {
+                    this.makeDecision();
+                    this.lastDecisionTime = currentTime;
+                }
+
+                this.executeAction();
+            }
+
+            isPathBlocked(targetX) {
+                // Check if there's a platform blocking horizontal movement
+                let checkY = this.ball.y;
+                let startX = this.ball.x;
+                let endX = targetX;
+                
+                if (startX > endX) {
+                    [startX, endX] = [endX, startX];
+                }
+
+                for (let p of this.platforms) {
+                    // Check platforms at roughly same height or slightly below
+                    if (p.y > checkY - 30 && p.y < checkY + 50) {
+                        // Check if platform intersects our horizontal path
+                        if (!(p.x + p.width < startX || p.x > endX)) {
+                            return p;
+                        }
+                    }
+                }
+                return null;
+            }
+
+            makeDecision() {
+                // Find current platform
+                this.currentPlatform = null;
+                if (this.ball.onGround) {
+                    for (let p of this.platforms) {
+                        if (Math.abs(this.ball.y + this.ball.radius - p.y) < 5 &&
+                            this.ball.x > p.x - 10 && this.ball.x < p.x + p.width + 10) {
+                            this.currentPlatform = p;
+                            break;
+                        }
+                    }
+                }
+
+                // Find platforms above current position
+                let platformsAbove = this.platforms.filter(p => 
+                    p.y < this.ball.y - 20 && p.y > this.ball.y - 350
+                );
+
+                if (platformsAbove.length === 0) {
+                    this.targetPlatform = null;
+                    return;
+                }
+
+                // Score platforms for reachability only
+                let reachablePlatforms = platformsAbove.filter(p => {
+                    let verticalDist = this.ball.y - p.y;
+                    let jumpHeight = Math.abs(this.ball.jumpPower) * Math.abs(this.ball.jumpPower) / (2 * this.ball.gravity);
+                    return verticalDist <= jumpHeight * 1.2;
+                });
+
+                if (reachablePlatforms.length === 0) {
+                    this.targetPlatform = null;
+                    return;
+                }
+
+                // Choose randomly from reachable platforms
+                let randomPlatform = reachablePlatforms[Math.floor(Math.random() * reachablePlatforms.length)];
+                let centerX = randomPlatform.x + randomPlatform.width / 2;
+                let horizontalDist = Math.abs(this.ball.x - centerX);
+                
+                this.targetPlatform = {
+                    platform: randomPlatform,
+                    score: 1,
+                    horizontalDist: horizontalDist
+                };
+            }
+
+            executeAction() {
+                if (!this.targetPlatform) {
+                    // No target, try to jump if on ground
+                    if (this.ball.onGround) {
+                        this.ball.jump();
+                    }
+                    return;
+                }
+
+                let platform = this.targetPlatform.platform;
+                let targetX = platform.x + platform.width / 2;
+                let horizontalDist = targetX - this.ball.x;
+
+                // Continue moving toward target even while in air
+                if (!this.ball.onGround) {
+                    // Adjust horizontal movement mid-air to reach target
+                    if (Math.abs(horizontalDist) > 20) {
+                        if (horizontalDist > 0) {
+                            this.ball.moveRight();
+                        } else {
+                            this.ball.moveLeft();
+                        }
+                    }
+                    return; // Don't re-evaluate actions while jumping
+                }
+
+                // Check if path is blocked (only when on ground)
+                // Check if path is blocked
+                let blockingPlatform = this.isPathBlocked(targetX);
+                
+                if (blockingPlatform && this.ball.onGround && this.currentPlatform) {
+                    // Navigate around obstacle
+                    // Choose edge based on which side the target is on
+                    let leftEdge = this.currentPlatform.x;
+                    let rightEdge = this.currentPlatform.x + this.currentPlatform.width;
+                    let platformCenter = this.currentPlatform.x + this.currentPlatform.width / 2;
+                    
+                    // Determine which edge provides better jump trajectory
+                    // If target is to the right, go to LEFT edge for shorter jump; vice versa
+                    let targetDirection = targetX - platformCenter;
+                    
+                    // Check edge bounds to prevent falling off
+                    let atLeftEdge = this.ball.x < leftEdge + 25;
+                    let atRightEdge = this.ball.x > rightEdge - 25;
+                    
+                    // Add slight randomness to prevent infinite loops
+                    let randomOffset = (Math.random() - 0.5) * 30;
+                    
+                    if (targetDirection > 0) {
+                        // Target is to the right, go to left edge for shorter jump
+                        if (!atLeftEdge) {
+                            this.ball.moveLeft();
+                        } else {
+                            // At left edge, jump first!
+                            this.ball.jump();
+                            // Then move right in air
+                            this.ball.moveRight();
+                        }
+                    } else {
+                        // Target is to the left, go to right edge for shorter jump
+                        if (!atRightEdge) {
+                            this.ball.moveRight();
+                        } else {
+                            // At right edge, jump first!
+                            this.ball.jump();
+                            // Then move left in air
+                            this.ball.moveLeft();
+                        }
+                    }
+                } else {
+                    // Normal movement toward target
+                    if (this.ball.onGround) {
+                        let aligned = Math.abs(horizontalDist) < 150;
+                        let platformAbove = platform.y < this.ball.y - 20;
+                        
+                        // Also jump if we're at the edge of current platform
+                        let atEdge = false;
+                        if (this.currentPlatform) {
+                            atEdge = this.ball.x < this.currentPlatform.x + 20 || 
+                                    this.ball.x > this.currentPlatform.x + this.currentPlatform.width - 20;
+                        }
+                        
+                        // Add randomness to alignment check to avoid stuck situations
+                        let randomFactor = Math.random() < 0.1 ? 50 : 0;
+                        
+                        // Jump first when aligned or at edge
+                        if ((aligned && platformAbove) || (atEdge && platformAbove) || randomFactor > 0) {
+                            this.ball.jump();
+                            // Then immediately move toward target in air
+                            if (Math.abs(horizontalDist) > 10) {
+                                if (horizontalDist > 0) {
+                                    this.ball.moveRight();
+                                } else {
+                                    this.ball.moveLeft();
+                                }
+                            }
+                        } else {
+                            // Not ready to jump, just move horizontally
+                            if (Math.abs(horizontalDist) > 10) {
+                                if (horizontalDist > 0) {
+                                    this.ball.moveRight();
+                                } else {
+                                    this.ball.moveLeft();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        class Game {
+            constructor() {
+                this.canvas = document.getElementById('gameCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.ball = new Ball(400, 500, 15);
+                this.platforms = [];
+                this.ai = null;
+                this.paused = false;
+                this.cameraY = 0;
+                this.lastRegenTime = Date.now();
+                this.regenInterval = 3000; // 3 seconds
+                
+                this.generatePlatforms();
+                this.ai = new AI(this.ball, this.platforms);
+                this.animate();
+            }
+
+            generatePlatforms() {
+                this.platforms = [];
+                
+                // Starting platform
+                this.platforms.push(new Platform(325, 550, 150, 20));
+
+                // Generate platforms going upward
+                let lastY = 550;
+                let lastX = 400;
+
+                for (let i = 0; i < 50; i++) {
+                    let verticalGap = 80 + Math.random() * 100;
+                    let newY = lastY - verticalGap;
+                    
+                    // Add 2-4 platforms at roughly the same level
+                    let platformCount = Math.floor(2 + Math.random() * 3);
+                    
+                    for (let j = 0; j < platformCount; j++) {
+                        let horizontalOffset = (Math.random() - 0.5) * 600;
+                        let newX = 400 + horizontalOffset;
+                        
+                        // Keep platforms within bounds
+                        newX = Math.max(50, Math.min(680, newX));
+                        
+                        // Slight vertical variation on same level
+                        let yVariation = (Math.random() - 0.5) * 20;
+                        
+                        let width = 60 + Math.random() * 80;
+                        this.platforms.push(new Platform(newX, newY + yVariation, width, 20));
+                    }
+                    
+                    lastY = newY;
+                }
+            }
+
+            regeneratePlatforms() {
+                // Find current platform ball is standing on
+                let currentPlatform = null;
+                if (this.ball.onGround && this.ai.currentPlatform) {
+                    currentPlatform = this.ai.currentPlatform;
+                }
+
+                // Store current platform temporarily
+                let savedPlatform = currentPlatform;
+                
+                // Regenerate all platforms
+                this.generatePlatforms();
+                
+                // If ball was on a platform, restore it
+                if (savedPlatform) {
+                    // Add the saved platform back
+                    this.platforms.push(savedPlatform);
+                }
+                
+                // Update AI's platform reference
+                this.ai.platforms = this.platforms;
+            }
+
+            update() {
+                if (this.paused) return;
+
+                this.ai.update();
+                this.ball.update(this.platforms);
+
+                // Regenerate platforms every 3 seconds
+                let currentTime = Date.now();
+                if (currentTime - this.lastRegenTime > this.regenInterval) {
+                    this.regeneratePlatforms();
+                    this.lastRegenTime = currentTime;
+                }
+
+                // Camera follows ball going up
+                let targetCameraY = Math.min(0, this.ball.y - 400);
+                this.cameraY += (targetCameraY - this.cameraY) * 0.1;
+
+                // Update UI
+                let heightMeters = Math.max(0, Math.floor((550 - this.ball.maxHeight) / 10));
+                document.getElementById('height').textContent = heightMeters;
+                document.getElementById('platforms').textContent = this.platforms.length;
+            }
+
+            draw() {
+                // Clear canvas
+                this.ctx.fillStyle = '#0a0a0a';
+                this.ctx.fillRect(0, 0, 800, 600);
+
+                // Apply camera transform
+                this.ctx.save();
+                this.ctx.translate(0, -this.cameraY);
+
+                // Draw platforms
+                for (let platform of this.platforms) {
+                    if (platform.y > this.cameraY - 50 && platform.y < this.cameraY + 650) {
+                        platform.draw(this.ctx);
+                    }
+                }
+
+                // Draw ball
+                this.ball.draw(this.ctx);
+
+                // Draw target indicator
+                if (this.ai.targetPlatform) {
+                    let p = this.ai.targetPlatform.platform;
+                    this.ctx.strokeStyle = 'rgba(0, 255, 0, 0.3)';
+                    this.ctx.lineWidth = 3;
+                    this.ctx.setLineDash([5, 5]);
+                    this.ctx.strokeRect(p.x - 5, p.y - 5, p.width + 10, p.height + 10);
+                    this.ctx.setLineDash([]);
+                }
+
+                this.ctx.restore();
+
+                // Draw grid pattern overlay
+                this.ctx.strokeStyle = 'rgba(0, 255, 0, 0.05)';
+                this.ctx.lineWidth = 1;
+                for (let i = 0; i < 800; i += 20) {
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(i, 0);
+                    this.ctx.lineTo(i, 600);
+                    this.ctx.stroke();
+                }
+                for (let i = 0; i < 600; i += 20) {
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(0, i);
+                    this.ctx.lineTo(800, i);
+                    this.ctx.stroke();
+                }
+            }
+
+            animate() {
+                this.update();
+                this.draw();
+                requestAnimationFrame(() => this.animate());
+            }
+
+            reset() {
+                this.ball = new Ball(400, 500, 15);
+                this.cameraY = 0;
+                this.generatePlatforms();
+                this.ai = new AI(this.ball, this.platforms);
+            }
+
+            togglePause() {
+                this.paused = !this.paused;
+            }
+        }
+
+        const game = new Game();
+    </script>
+</body>
+</html>
